@@ -83,6 +83,7 @@ interface SurveyScreenProps {
   onSaveSurvey: (survey: SurveyRecord) => void;
   onOpenMapDrawing?: (surveyId?: string) => void;
   onOpenReport?: (surveyId?: string) => void;
+  onOpenHandMap?: (surveyId: string) => void;
   onOpenMouzaMap?: (surveyId?: string) => void;
   bookingId?: string | null;
   initialSurveyId?: string | null;
@@ -94,6 +95,7 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
   onSaveSurvey,
   onOpenMapDrawing,
   onOpenReport,
+  onOpenHandMap,
   onOpenMouzaMap,
   bookingId,
   initialSurveyId,
@@ -1072,6 +1074,15 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
                             className="text-[14px] font-bold text-emerald-900 bg-white border-2 border-emerald-700 px-3 min-h-[40px] rounded-lg flex items-center gap-1 transition active:scale-95"
                           >
                             ✎ <span>{isBn ? 'খুলুন / এডিট' : 'Open / Edit'}</span>
+                          </button>
+                        )}
+
+                        {onOpenHandMap && survey.plots && survey.plots.length > 0 && (
+                          <button
+                            onClick={() => onOpenHandMap(survey.id)}
+                            className="text-[14px] font-bold text-amber-900 bg-amber-50 border-2 border-amber-300 px-3 min-h-[40px] rounded-lg flex items-center gap-1 transition active:scale-95"
+                          >
+                            ✎ <span>{isBn ? 'হ্যান্ড ম্যাপ' : 'Hand map'}</span>
                           </button>
                         )}
 

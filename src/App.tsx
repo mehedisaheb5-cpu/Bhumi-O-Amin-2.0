@@ -23,6 +23,7 @@ import { ChatModal } from './components/ChatModal';
 import { SidePanel, SideMenuId } from './components/fieldamin/SidePanel';
 import { ConverterScreen } from './components/fieldamin/ConverterScreen';
 import { ComingSoonScreen } from './components/fieldamin/ComingSoonScreen';
+import { HandMapScreen } from './components/fieldamin/HandMapScreen';
 import { FieldHomeScreen } from './components/fieldamin/FieldHomeScreen';
 
 /**
@@ -576,6 +577,7 @@ export default function App() {
                   bookingId: currentScreen.bookingId,
                 })
               }
+              onOpenHandMap={(sId) => navigateTo({ screenId: 'handmap', surveyId: sId })}
               onOpenMouzaMap={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
@@ -665,6 +667,7 @@ export default function App() {
                   bookingId: currentScreen.bookingId,
                 })
               }
+              onOpenHandMap={(sId) => navigateTo({ screenId: 'handmap', surveyId: sId })}
               onOpenMouzaMap={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
@@ -805,8 +808,18 @@ export default function App() {
         {/* ফিল্ড আমিন: পরিমাপ কনভার্টার (নিচের বারের ট্যাব) */}
         {currentScreen.screenId === 'converter' && <ConverterScreen />}
 
-        {/* ফিল্ড আমিন: হ্যান্ড ম্যাপ (ধাপ ৬) ও এডমিন (ধাপ ৮) — আপাতত তথ্য পাতা */}
-        {(currentScreen.screenId === 'handmap' || currentScreen.screenId === 'admin') && (
+        {/* ফিল্ড আমিন: হ্যান্ড ম্যাপ (ধাপ ৬) */}
+        {currentScreen.screenId === 'handmap' && (
+          <HandMapScreen
+            surveys={surveys}
+            initialSurveyId={currentScreen.surveyId}
+            onGoMeasure={() => navigateTo({ screenId: 'possession' })}
+            onOpenReport={(sId) => navigateTo({ screenId: 'reports', surveyId: sId })}
+          />
+        )}
+
+        {/* ফিল্ড আমিন: এডমিন (ধাপ ৮) — আপাতত তথ্য পাতা */}
+        {currentScreen.screenId === 'admin' && (
           <ComingSoonScreen
             kind={currentScreen.screenId}
             onGoMeasure={() => navigateTo({ screenId: 'possession' })}
