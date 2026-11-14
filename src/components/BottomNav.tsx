@@ -1,126 +1,52 @@
 import React from 'react';
-import {
-  Home,
-  Compass,
-  Layers,
-  Split,
-  Banknote,
-  FileSpreadsheet,
-  Map,
-  User,
-} from 'lucide-react';
+import { House, Compass, ArrowLeftRight, FileText } from 'lucide-react';
 import { NavTab, Language } from '../types';
 
 interface BottomNavProps {
-  currentTab: NavTab;
+  currentTab: NavTab | null;
   onSelectTab: (tab: NavTab) => void;
   lang: Language;
 }
 
+/**
+ * ফিল্ড আমিন — নিচের বার: ডিজাইন C-এর ভাসমান পিল (design-previews/01-home.html)
+ * ৪টা ট্যাব: হোম · দখল পরিমাপ · কনভার্টার · রিপোর্ট।
+ * চালু ট্যাব চওড়া সবুজ পিল হয়ে নাম দেখায়; বাকিগুলো বড় আইকন।
+ */
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, lang }) => {
   const isBn = lang === 'bn';
 
-  // P1 Mobile: 5 tabs as per user final — Home | দখল পরিমাপ | মৌজা ম্যাপ | সার্ভে রিপোর্ট | এডমিন
-  const navItems: Array<{
-    id: NavTab;
-    activeCheck: (tab: NavTab) => boolean;
-    label: string;
-    icon: React.ReactNode;
-    activeClasses: {
-      btn: string;
-      icon: string;
-      dot: string;
-    };
-  }> = [
-    {
-      id: 'home',
-      activeCheck: (tab) => tab === 'home',
-      label: isBn ? 'হোম' : 'Home',
-      icon: <Home className="w-5 h-5" />,
-      activeClasses: {
-        btn: 'text-emerald-950 font-bold bg-emerald-50 scale-[1.02]',
-        icon: 'text-emerald-800',
-        dot: 'bg-emerald-700',
-      },
-    },
-    {
-      id: 'possession',
-      activeCheck: (tab) => tab === 'possession' || tab === 'measure' || tab === 'survey',
-      label: isBn ? 'দখল পরিমাপ' : 'Possession',
-      icon: <Compass className="w-5 h-5" />,
-      activeClasses: {
-        btn: 'text-emerald-950 font-bold bg-emerald-50 scale-[1.02]',
-        icon: 'text-emerald-800',
-        dot: 'bg-emerald-700',
-      },
-    },
-    {
-      id: 'maps',
-      activeCheck: (tab) => tab === 'maps',
-      label: isBn ? 'মৌজা ম্যাপ' : 'Mouza Map',
-      icon: <Map className="w-5 h-5" />,
-      activeClasses: {
-        btn: 'text-sky-950 font-bold bg-sky-50 scale-[1.02]',
-        icon: 'text-sky-800',
-        dot: 'bg-sky-700',
-      },
-    },
-    {
-      id: 'reports',
-      activeCheck: (tab) => tab === 'reports',
-      label: isBn ? 'সার্ভে রিপোর্ট' : 'Reports',
-      icon: <FileSpreadsheet className="w-5 h-5" />,
-      activeClasses: {
-        btn: 'text-violet-950 font-bold bg-violet-50 scale-[1.02]',
-        icon: 'text-violet-800',
-        dot: 'bg-violet-700',
-      },
-    },
-    {
-      id: 'profile',
-      activeCheck: (tab) => tab === 'profile',
-      label: isBn ? 'এডমিন' : 'Admin',
-      icon: <User className="w-5 h-5" />,
-      activeClasses: {
-        btn: 'text-slate-900 font-bold bg-slate-100 scale-[1.02]',
-        icon: 'text-slate-800',
-        dot: 'bg-slate-700',
-      },
-    },
+  const navItems: Array<{ id: NavTab; label: string; icon: React.ReactNode }> = [
+    { id: 'home', label: isBn ? 'হোম' : 'Home', icon: <House className="w-[26px] h-[26px]" /> },
+    { id: 'possession', label: isBn ? 'দখল পরিমাপ' : 'Measure', icon: <Compass className="w-[26px] h-[26px]" /> },
+    { id: 'converter', label: isBn ? 'কনভার্টার' : 'Converter', icon: <ArrowLeftRight className="w-[26px] h-[26px]" /> },
+    { id: 'reports', label: isBn ? 'রিপোর্ট' : 'Reports', icon: <FileText className="w-[26px] h-[26px]" /> },
   ];
 
   return (
     <nav
       id="bottom-navigation-bar"
-      className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-lg px-2 py-1 safe-area-pb"
+      aria-label={isBn ? 'প্রধান মেনু' : 'Main menu'}
+      className="fixed left-3.5 right-3.5 z-30 pointer-events-none"
+      style={{ bottom: 'calc(14px + env(safe-area-inset-bottom))' }}
     >
-      <div className="max-w-md mx-auto grid grid-cols-5 gap-1">
+      <div className="pointer-events-auto max-w-md mx-auto flex gap-1 bg-white rounded-full p-1.5 shadow-[0_10px_30px_rgba(15,23,42,.18)] border border-slate-100">
         {navItems.map((item) => {
-          const isActive = item.activeCheck(currentTab);
+          const isActive = currentTab === item.id;
           return (
             <button
               key={item.id}
               id={`nav-${item.id}`}
               onClick={() => onSelectTab(item.id)}
-              className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-xl transition-all ${
-                isActive
-                  ? item.activeClasses.btn
-                  : 'text-slate-500 hover:text-slate-900 font-medium'
+              aria-label={item.label}
+              aria-current={isActive ? 'page' : undefined}
+              style={{ flexGrow: isActive ? 2.2 : 1, flexBasis: 0 }}
+              className={`flex items-center justify-center gap-1.5 min-h-[56px] rounded-full font-extrabold text-[15px] whitespace-nowrap transition-all duration-200 active:scale-95 ${
+                isActive ? 'bg-[#065f46] text-white px-3' : 'text-slate-600'
               }`}
             >
-              <div
-                className={`p-1 rounded-lg transition-colors ${
-                  isActive ? item.activeClasses.icon : 'text-slate-400'
-                }`}
-              >
-                {item.icon}
-              </div>
-              <span className="text-[10px] sm:text-[11px] leading-tight tracking-tight mt-0.5 truncate max-w-full text-center">
-                {item.label}
-              </span>
-              {isActive && (
-                <div className={`w-1.5 h-1.5 rounded-full ${item.activeClasses.dot} mt-0.5`} />
-              )}
+              {item.icon}
+              {isActive && <span>{item.label}</span>}
             </button>
           );
         })}

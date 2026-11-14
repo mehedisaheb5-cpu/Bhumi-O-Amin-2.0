@@ -54,7 +54,8 @@ export type NavTab =
   | 'khatian'
   | 'reports'
   | 'mouza_rates'
-  | 'dalil';
+  | 'dalil'
+  | 'converter';
 
 export interface SurveyPoint {
   id: string;

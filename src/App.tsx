@@ -20,6 +20,9 @@ import { MouzaRateScreen } from './components/rates/MouzaRateScreen';
 import { AminServicesScreen } from './components/AminServicesScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { ChatModal } from './components/ChatModal';
+import { SidePanel, SideMenuId } from './components/fieldamin/SidePanel';
+import { ConverterScreen } from './components/fieldamin/ConverterScreen';
+import { ComingSoonScreen } from './components/fieldamin/ComingSoonScreen';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -53,7 +56,11 @@ export type AppScreenId =
   | 'reports'
   | 'mouza_rates'
   | 'services'
-  | 'profile';
+  | 'profile'
+  // ফিল্ড আমিন
+  | 'converter'
+  | 'handmap'
+  | 'admin';
 
 export interface AppScreenState {
   screenId: AppScreenId;
@@ -80,11 +87,16 @@ export default function App() {
     if (hash === '#rate' || hash === '#rates' || hash === '#mouza-rate') return { screenId: 'mouza_rates' };
     if (hash === '#services' || hash === '#booking') return { screenId: 'services' };
     if (hash === '#profile') return { screenId: 'profile' };
+    if (hash === '#converter') return { screenId: 'converter' };
+    if (hash === '#handmap') return { screenId: 'handmap' };
+    if (hash === '#admin') return { screenId: 'admin' };
     return { screenId: 'home' };
   });
 
   // Modal State
   const [showChatModal, setShowChatModal] = useState<boolean>(false);
+  // ফিল্ড আমিন: সাইড প্যানেল (☰)
+  const [sidePanelOpen, setSidePanelOpen] = useState<boolean>(false);
   const isNavigatingRef = useRef<boolean>(false);
 
   // Local state for surveys with localStorage persistence
@@ -257,6 +269,10 @@ export default function App() {
    * In-App Back Button Handler (acts identically to hardware Back button)
    */
   const goBack = useCallback(() => {
+    if (sidePanelOpen) {
+      closeSidePanel();
+      return;
+    }
     if (showChatModal) {
       setShowChatModal(false);
       return;
@@ -274,7 +290,7 @@ export default function App() {
         navigateTo({ screenId: 'home' }, true);
       }
     }
-  }, [showChatModal, currentScreen.screenId, navigateTo]);
+  }, [sidePanelOpen, showChatModal, currentScreen.screenId, navigateTo]);
 
   /**
    * Browser / Android Popstate Listener
@@ -286,6 +302,17 @@ export default function App() {
     }
 
     const handlePopState = (event: PopStateEvent) => {
+      // ফিল্ড আমিন: সাইড প্যানেল খোলা থাকলে Back চাপলে শুধু প্যানেল বন্ধ হবে
+      if (sidePanelRef.current) {
+        sidePanelRef.current = false;
+        setSidePanelOpen(false);
+        return;
+      }
+      // প্যানেল বন্ধ করতে নিজে history.back() করা হয়েছিল — পাতা যেমন আছে থাকবে
+      if (ignoreNextPopRef.current) {
+        ignoreNextPopRef.current = false;
+        return;
+      }
       // If modal is open, close it first without navigating away
       if (showChatModal) {
         setShowChatModal(false);
@@ -306,6 +333,75 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [showChatModal, currentScreen]);
 
+  /* ---------- ফিল্ড আমিন: সাইড প্যানেল (Android Back বোতামে বন্ধ হয়) ---------- */
+  const sidePanelRef = useRef<boolean>(false);
+  const ignoreNextPopRef = useRef<boolean>(false);
+  const openSidePanel = () => {
+    if (sidePanelRef.current) return;
+    sidePanelRef.current = true;
+    window.history.pushState({ screen: currentScreen, sidePanel: true }, '');
+    setSidePanelOpen(true);
+  };
+  function closeSidePanel() {
+    if (!sidePanelRef.current) return;
+    sidePanelRef.current = false;
+    setSidePanelOpen(false);
+    if (window.history.state?.sidePanel) {
+      ignoreNextPopRef.current = true;
+      window.history.back();
+    }
+  }
+  const sideTarget = (id: SideMenuId): AppScreenState => {
+    switch (id) {
+      case 'possession':
+        return { screenId: 'possession' };
+      case 'handmap':
+        return { screenId: 'handmap' };
+      case 'reports':
+        return { screenId: 'reports' };
+      case 'admin':
+        return { screenId: 'admin' };
+      default:
+        return { screenId: 'home' };
+    }
+  };
+  const handleSideNavigate = (id: SideMenuId) => {
+    const target = sideTarget(id);
+    const onPanelEntry = !!window.history.state?.sidePanel;
+    sidePanelRef.current = false;
+    setSidePanelOpen(false);
+    if (target.screenId === currentScreen.screenId) {
+      // একই পাতা — শুধু প্যানেলের ইতিহাস সরাই
+      if (onPanelEntry) {
+        ignoreNextPopRef.current = true;
+        window.history.back();
+      }
+      return;
+    }
+    // প্যানেলের ইতিহাসের জায়গায় নতুন পাতা বসে, তাই Back চাপলে আগের পাতায় ফেরে
+    navigateTo(target, onPanelEntry);
+  };
+  const activeSideMenu: SideMenuId | null = (() => {
+    switch (currentScreen.screenId) {
+      case 'home':
+        return 'home';
+      case 'measure_root':
+      case 'measure_practical':
+      case 'measure_standard':
+      case 'measure_possession':
+      case 'possession':
+        return 'possession';
+      case 'handmap':
+        return 'handmap';
+      case 'reports':
+        return 'reports';
+      case 'admin':
+        return 'admin';
+      default:
+        return null;
+    }
+  })();
+
   // Open Chat Modal with history guard so Android back button closes it
   const handleOpenChatModal = () => {
     window.history.pushState({ modal: 'chat', screen: currentScreen }, '');
@@ -322,7 +418,8 @@ export default function App() {
   /**
    * Mapping active screen to BottomNav tab highlight
    */
-  const activeNavTab: NavTab = (() => {
+  // ফিল্ড আমিন: নিচের বারে ৪টা ট্যাব — হোম · দখল পরিমাপ · কনভার্টার · রিপোর্ট
+  const activeNavTab: NavTab | null = (() => {
     switch (currentScreen.screenId) {
       case 'home':
         return 'home';
@@ -332,22 +429,12 @@ export default function App() {
       case 'measure_possession':
       case 'possession':
         return 'possession';
-      case 'maps_and_drawings':
-        return 'maps';
-      case 'khatian':
-      case 'inheritance':
-        return 'khatian'; // legacy fallback, but bottom now has no khatian — home cards route there
+      case 'converter':
+        return 'converter';
       case 'reports':
         return 'reports';
-      case 'mouza_rates':
-      case 'dalil':
-        return 'mouza_rates'; // Dalil will later become its own, for P1 keep under dalil
-      case 'services':
-        return 'services';
-      case 'profile':
-        return 'profile';
       default:
-        return 'home';
+        return null;
     }
   })();
 
@@ -366,6 +453,9 @@ export default function App() {
         break;
       case 'reports':
         navigateTo({ screenId: 'reports' });
+        break;
+      case 'converter':
+        navigateTo({ screenId: 'converter' });
         break;
       case 'profile':
         navigateTo({ screenId: 'profile' });
@@ -396,6 +486,7 @@ export default function App() {
         onToggleLang={handleToggleLang}
         onOpenChat={handleOpenChatModal}
         onHomeClick={() => navigateTo({ screenId: 'home' })}
+        onOpenMenu={openSidePanel}
         onSelectBooking={(_bookingId) => {
           navigateTo({ screenId: 'services' });
         }}
@@ -405,7 +496,7 @@ export default function App() {
       <ErrorBoundary>
       <main
         className={`flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-6 ${
-          currentScreen.screenId === 'survey' ? 'pt-2 pb-2 overflow-hidden' : 'pt-3.5 pb-24'
+          currentScreen.screenId === 'survey' ? 'pt-2 pb-2 overflow-hidden' : 'pt-3.5 pb-28'
         }`}
       >
         {/* 1. HOME SCREEN — P1 Mobile: 5 cards (দখল / ম্যাপ 3 / খতিয়ান / উত্তরাধিকার / দলিল) */}
@@ -697,8 +788,26 @@ export default function App() {
             />
           </div>
         )}
+        {/* ফিল্ড আমিন: পরিমাপ কনভার্টার (নিচের বারের ট্যাব) */}
+        {currentScreen.screenId === 'converter' && <ConverterScreen />}
+
+        {/* ফিল্ড আমিন: হ্যান্ড ম্যাপ (ধাপ ৬) ও এডমিন (ধাপ ৮) — আপাতত তথ্য পাতা */}
+        {(currentScreen.screenId === 'handmap' || currentScreen.screenId === 'admin') && (
+          <ComingSoonScreen
+            kind={currentScreen.screenId}
+            onGoMeasure={() => navigateTo({ screenId: 'possession' })}
+          />
+        )}
       </main>
       </ErrorBoundary>
+
+      {/* ফিল্ড আমিন: সাইড প্যানেল (ডিজাইন C) */}
+      <SidePanel
+        open={sidePanelOpen}
+        active={activeSideMenu}
+        onClose={closeSidePanel}
+        onNavigate={handleSideNavigate}
+      />
 
       {/* Simplified Bottom Navigation Bar */}
       <BottomNav
