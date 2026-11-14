@@ -1,0 +1,13 @@
+# Netlify / Cloudflare Pages: নতুন সংস্করণ যেন দ্রুত ফোনে পৌঁছায়
+/sw.js
+  Cache-Control: no-cache
+/registerSW.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

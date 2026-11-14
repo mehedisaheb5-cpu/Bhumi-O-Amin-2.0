@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="bn">
+  <head>
+    <script>
+      // Filter benign Vite websocket disconnection notices in sandboxed preview iframe
+      (function() {
+        var _err = console.error;
+        var _warn = console.warn;
+        console.error = function() {
+          var msg = arguments[0];
+          if (typeof msg === 'string' && (msg.indexOf('[vite]') !== -1 || msg.indexOf('vite-plugin-pwa') !== -1)) {
+            return;
+          }
+          return _err.apply(console, arguments);
+        };
+        console.warn = function() {
+          var msg = arguments[0];
+          if (typeof msg === 'string' && (msg.indexOf('[vite]') !== -1 || msg.indexOf('vite-plugin-pwa') !== -1)) {
+            return;
+          }
+          return _warn.apply(console, arguments);
+        };
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>ভূমি ও আমিন – ফিল্ড আমিন সংস্করণ</title>
+    <meta name="description" content="মাঠের আমিনের জন্য অফলাইন অ্যাপ — দখল পরিমাপ, হ্যান্ড ম্যাপ ও রিপোর্ট।" />
+    <meta property="og:title" content="ভূমি ও আমিন – ফিল্ড আমিন সংস্করণ" />
+    <meta property="og:description" content="মাঠের আমিনের জন্য অফলাইন অ্যাপ — দখল পরিমাপ, হ্যান্ড ম্যাপ ও রিপোর্ট।" />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#065f46" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ফিল্ড আমিন" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%icon.svg" />
+    <!-- অফলাইন: কোনো বাইরের ফন্ট/CSS নেই। Noto Sans Bengali src/index.css-এ নিজস্ব; leaflet CSS main.tsx-এ ইমপোর্ট করা। -->
+  </head>
+  <body class="bg-slate-50 text-slate-900 antialiased font-['Noto_Sans_Bengali',sans-serif] selection:bg-emerald-200 selection:text-emerald-900">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

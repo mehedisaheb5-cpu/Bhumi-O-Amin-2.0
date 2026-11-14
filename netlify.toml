@@ -1,0 +1,7 @@
+# ফিল্ড আমিন — Netlify-তে ফ্রি হোস্টিং (স্ট্যাটিক PWA, কোনো সার্ভার নেই)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"

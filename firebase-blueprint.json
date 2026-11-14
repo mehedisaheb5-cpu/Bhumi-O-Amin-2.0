@@ -1,0 +1,313 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile in Bhumi & Amin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "role": { "type": "string", "enum": ["customer", "amin", "admin"] },
+        "photoUrl": { "type": "string", "maxLength": 500 },
+        "district": { "type": "string", "maxLength": 80 },
+        "upazila": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "enum": ["active", "pending", "suspended"] },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "name", "email", "role", "status"]
+    },
+    "AminProfile": {
+      "title": "AminProfile",
+      "description": "Professional surveyor profile verified by admin",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 120 },
+        "district": { "type": "string", "maxLength": 80 },
+        "upazila": { "type": "string", "maxLength": 80 },
+        "serviceDistricts": { "type": "array" },
+        "serviceUpazilas": { "type": "array" },
+        "experienceYears": { "type": "number" },
+        "services": { "type": "array" },
+        "serviceAreas": { "type": "string", "maxLength": 300 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "rejected", "suspended"] },
+        "ratingAverage": { "type": "number" },
+        "completedJobs": { "type": "number" },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["userId", "name", "phone", "verificationStatus"]
+    },
+    "CustomerProfile": {
+      "title": "CustomerProfile",
+      "description": "Landowner or client private profile",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 120 },
+        "district": { "type": "string", "maxLength": 80 },
+        "upazila": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["userId", "name", "email"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Land survey service booking record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "bookingNumber": { "type": "string", "maxLength": 60 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "serviceId": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "maxLength": 40 },
+        "assignedAminId": { "type": "string", "maxLength": 128 },
+        "fee": { "type": "number" },
+        "scheduledDate": { "type": "string", "maxLength": 50 },
+        "scheduledTime": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "customerId", "serviceId", "status"]
+    },
+    "SurveyRecord": {
+      "title": "SurveyRecord",
+      "description": "GPS survey points and geometry computation data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "areaSqFt": { "type": "number" },
+        "perimeterFt": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "status": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "ownerId"]
+    },
+    "SurveyReport": {
+      "title": "SurveyReport",
+      "description": "A4 professional survey report record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "reportNumber": { "type": "string", "maxLength": 60 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "surveyRecordId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 30 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "ownerId", "reportNumber"]
+    },
+    "DigitalDrawing": {
+      "title": "DigitalDrawing",
+      "description": "Cadastral 2D plot drawing and annotations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "surveyRecordId": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "ownerId"]
+    },
+    "PentagraphProject": {
+      "title": "PentagraphProject",
+      "description": "Comparative cadastral overlay and demarcation project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "surveyId": { "type": "string", "maxLength": 128 },
+        "mouzaMapId": { "type": "string", "maxLength": 128 },
+        "dagId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "ownerId", "title"]
+    },
+    "CustomerRating": {
+      "title": "CustomerRating",
+      "description": "Customer rating and review for surveyor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "aminId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 120 },
+        "rating": { "type": "number" },
+        "comment": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "bookingId", "aminId", "rating"]
+    },
+    "CustomerComplaint": {
+      "title": "CustomerComplaint",
+      "description": "Dispute or complaint filed by customer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "customerName": { "type": "string", "maxLength": 120 },
+        "customerPhone": { "type": "string", "maxLength": 30 },
+        "aminId": { "type": "string", "maxLength": 128 },
+        "issueType": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 1500 },
+        "status": { "type": "string", "enum": ["open", "under_review", "resolved", "closed", "submitted"] },
+        "resolutionNotes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "bookingId", "issueType", "description", "status"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Land survey service catalog entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "nameBn": { "type": "string", "maxLength": 150 },
+        "nameEn": { "type": "string", "maxLength": 150 },
+        "baseFee": { "type": "number" },
+        "platformFee": { "type": "number" },
+        "estimatedHours": { "type": "number" },
+        "category": { "type": "string", "maxLength": 60 },
+        "createdAt": { "type": "string", "maxLength": 50 },
+        "updatedAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "nameBn", "nameEn", "baseFee", "platformFee"]
+    },
+    "AminAssignment": {
+      "title": "AminAssignment",
+      "description": "Supervised booking assignment to surveyor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "aminId": { "type": "string", "maxLength": 128 },
+        "assignedAt": { "type": "string", "maxLength": 50 },
+        "assignedBy": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["offered", "accepted", "rejected"] },
+        "rejectionReason": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["bookingId", "aminId", "status"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "Payment receipt or fee transaction record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "bookingId": { "type": "string", "maxLength": 128 },
+        "customerId": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["bkash", "nagad", "card", "cash_on_field"] },
+        "status": { "type": "string", "enum": ["unpaid", "pending", "paid", "failed", "refunded"] },
+        "transactionId": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "bookingId", "amount", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System and business operation audit record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "actorUserId": { "type": "string", "maxLength": 128 },
+        "actorRole": { "type": "string", "maxLength": 40 },
+        "action": { "type": "string", "maxLength": 80 },
+        "entityType": { "type": "string", "maxLength": 60 },
+        "entityId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "details": { "type": "string", "maxLength": 2000 }
+      },
+      "required": ["id", "actorUserId", "actorRole", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Core user document for authentication and authorization"
+    },
+    "/amins/{aminId}": {
+      "schema": "AminProfile",
+      "description": "Verified or pending surveyor profile alias"
+    },
+    "/aminProfiles/{aminId}": {
+      "schema": "AminProfile",
+      "description": "Verified or pending surveyor profile"
+    },
+    "/customerProfiles/{customerId}": {
+      "schema": "CustomerProfile",
+      "description": "Private landowner customer profile"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Land survey service catalog"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Survey service bookings"
+    },
+    "/assignments/{assignmentId}": {
+      "schema": "AminAssignment",
+      "description": "Booking assignment logs and offers"
+    },
+    "/surveyRecords/{surveyId}": {
+      "schema": "SurveyRecord",
+      "description": "GPS survey geometry and land measurement records"
+    },
+    "/reports/{reportId}": {
+      "schema": "SurveyReport",
+      "description": "A4 printable professional survey reports"
+    },
+    "/drawings/{drawingId}": {
+      "schema": "DigitalDrawing",
+      "description": "2D plot sketches and cadastral vector drawings"
+    },
+    "/payments/{paymentId}": {
+      "schema": "PaymentRecord",
+      "description": "Financial records and invoice status"
+    },
+    "/ratings/{ratingId}": {
+      "schema": "CustomerRating",
+      "description": "Customer reviews and feedback"
+    },
+    "/complaints/{complaintId}": {
+      "schema": "CustomerComplaint",
+      "description": "Dispute investigation and grievances"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Immutable security and business lifecycle audit logs"
+    },
+    "/mouzaMaps/{mapId}": {
+      "schema": "MouzaMapLibraryItem",
+      "description": "Scanned cadastral mouza maps library collection"
+    },
+    "/externalSources/{sourceId}": {
+      "schema": "ExternalMapSourceRecord",
+      "description": "Directory of verified external public mouza map reference links"
+    }
+  }
+}
