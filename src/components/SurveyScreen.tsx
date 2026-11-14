@@ -23,6 +23,23 @@ import {
 import { Language, SurveyRecord, SurveyPoint, SurveyDrawing, PlotMeta } from '../types';
 import { PlotMeasurementWorkspace } from './survey/PlotMeasurementWorkspace';
 import { DrawingCanvas } from './survey/DrawingCanvas';
+import { SideMeasureWizard } from './fieldamin/SideMeasureWizard';
+import {
+  BAHU_SURVEY_PREFIX,
+  SYNC_NOTE_KEY,
+  commitCompleted,
+  draftFromSurvey,
+  handoffToCanvas,
+  loadDraft,
+  saveDraft,
+  syncCanvasIntoDraft,
+} from '../lib/bahuDraftStore';
+import { toBnDigits } from '../lib/banglaDate';
+
+/** পুরনো বাহুভিত্তিক স্ক্রিন (PlotMeasurementWorkspace) — লুকানো, মুছিনি */
+const SHOW_LEGACY_BAHU = false;
+/** GPS জরিপ — ফিল্ড আমিন সংস্করণে লুকানো */
+const SHOW_GPS = false;
 import { translations } from '../data/translations';
 import { CurrentGpsPosition, GPSStatus, GpsPoint } from '../lib/gps-types';
 import {
@@ -109,6 +126,61 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'plots_survey' | 'drawing_based' | 'gps_survey' | 'saved_records'>(
     initialSurveyId ? 'saved_records' : 'plots_survey'
   );
+  const [wizardKey, setWizardKey] = useState(0);
+  const [bahuInfoLine, setBahuInfoLine] = useState<string | null>(null);
+
+  /** চিত্র ভিত্তিক ট্যাব খোলার আগে বাহুর নকশা ক্যানভাসে পাঠাই */
+  const openDrawingTab = () => {
+    const d = loadDraft();
+    handoffToCanvas(d, (m) => window.confirm(m));
+    setBahuInfoLine(
+      d && d.infoDone
+        ? `${d.info.clientName} · ${d.info.mouza} · দাগ ${toBnDigits(d.info.dagNo)}`
+        : null
+    );
+    setActiveTab('drawing_based');
+  };
+
+  /** চিত্র ভিত্তিক ছেড়ে গেলে (অন্য ট্যাব / অন্য স্ক্রিন) ক্যানভাসের মাপ খসড়া ও রিপোর্টে নিই */
+  const latest = useRef({ onSaveSurvey, bookingId });
+  latest.current = { onSaveSurvey, bookingId };
+  const syncFromCanvas = () => {
+    const d = loadDraft();
+    if (!d) return;
+    const r = syncCanvasIntoDraft(d);
+    if (!r.changed) return;
+    saveDraft(r.draft);
+    try {
+      sessionStorage.setItem(SYNC_NOTE_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+    if (r.draft.status === 'completed') commitCompleted(r.draft, latest.current.onSaveSurvey, latest.current.bookingId);
+  };
+  const prevTab = useRef(activeTab);
+  useEffect(() => {
+    if (prevTab.current === 'drawing_based' && activeTab !== 'drawing_based') syncFromCanvas();
+    prevTab.current = activeTab;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+  useEffect(
+    () => () => {
+      if (prevTab.current === 'drawing_based') syncFromCanvas();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  /** সংরক্ষিত বাহুভিত্তিক জরিপ আবার খুলে এডিট */
+  const editBahuSurvey = (survey: SurveyRecord) => {
+    const cur = loadDraft();
+    if (cur && cur.surveyId !== survey.id && cur.status !== 'completed' && (cur.info.clientName || cur.infoDone)) {
+      if (!window.confirm('একটি অসম্পূর্ণ খসড়া আছে। সেটা বাদ দিয়ে এই জরিপ খুলবেন?')) return;
+    }
+    saveDraft(draftFromSurvey(survey));
+    setWizardKey((k) => k + 1);
+    setActiveTab('plots_survey');
+  };
 
   // GPS State
   const [gpsStatus, setGpsStatus] = useState<GPSStatus>('ready');
@@ -486,7 +558,7 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
       )}
 
         {/* View Switcher: Individual Side Measurements (Plots) vs Real GPS Survey vs Saved Records */}
-        <div className={`${activeTab === 'drawing_based' ? 'hidden' : 'flex'} bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-xs font-semibold`}>
+        <div className={`${activeTab === 'drawing_based' ? 'hidden' : 'flex'} w-full bg-slate-100 p-1 rounded-2xl border border-slate-200 text-[15px] font-bold [&>button]:flex-1 [&>button]:min-h-[48px] [&>button]:leading-tight [&>button]:px-1.5`}>
           <button
             onClick={() => setActiveTab('plots_survey')}
             className={`px-3 py-1.5 rounded-lg transition-all ${
@@ -495,17 +567,18 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {isBn ? 'বাহুভিত্তিক পরিমাপ' : 'Side Measurement'}
+            {isBn ? 'বাহুভিত্তিক' : 'Side Measurement'}
           </button>
           <button
-            onClick={() => setActiveTab('drawing_based')}
+            id="tab-drawing-based"
+            onClick={openDrawingTab}
             className={`px-3 py-1.5 rounded-lg transition-all ${
               activeTab === 'drawing_based'
                 ? 'bg-emerald-900 text-white shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {isBn ? 'চিত্র ভিত্তিক পরিমাপ' : 'Drawing-based'}
+            {isBn ? 'চিত্র ভিত্তিক' : 'Drawing-based'}
           </button>
           {/* GPS tab button hidden */}
           <button
@@ -516,22 +589,55 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {t.savedSurveys} ({formatNumberByLang(surveys.length, lang)})
+            {isBn ? 'সংরক্ষিত' : t.savedSurveys} ({formatNumberByLang(surveys.length, lang)})
           </button>
         </div>
       </div>
 
       {activeTab === 'plots_survey' ? (
-        <PlotMeasurementWorkspace
-          lang={lang}
-          surveys={surveys}
-          onSaveSurvey={onSaveSurvey}
-          onOpenReport={onOpenReport}
-          onOpenMapDrawing={onOpenMapDrawing}
-          bookingId={bookingId}
-        />
+        SHOW_LEGACY_BAHU ? (
+          <PlotMeasurementWorkspace
+            lang={lang}
+            surveys={surveys}
+            onSaveSurvey={onSaveSurvey}
+            onOpenReport={onOpenReport}
+            onOpenMapDrawing={onOpenMapDrawing}
+            bookingId={bookingId}
+          />
+        ) : (
+          <SideMeasureWizard
+            key={wizardKey}
+            lang={lang}
+            onSaveSurvey={onSaveSurvey}
+            onOpenReport={onOpenReport}
+            onOpenDrawing={openDrawingTab}
+            bookingId={bookingId}
+          />
+        )
       ) : activeTab === 'drawing_based' ? (
-        <DrawingCanvas lang={lang} />
+        <div style={{ ['--fa-canvas-offset' as string]: '3.25rem' } as React.CSSProperties}>
+          {/* বাহু থেকে আসা কাজের তথ্য + ফেরার বোতাম (ক্যানভাসের ভেতরে হাত দিইনি) */}
+          <div id="drawing-info-strip" className="flex items-center gap-2 h-[2.9rem] mb-1">
+            <button
+              onClick={() => setActiveTab('plots_survey')}
+              className="shrink-0 h-full px-3 rounded-xl bg-emerald-800 text-white text-[15px] font-extrabold"
+            >
+              ← বাহুভিত্তিক
+            </button>
+            <div className="flex-1 min-w-0 h-full px-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center">
+              <span className="truncate text-[15px] font-bold text-emerald-950">
+                {bahuInfoLine || (isBn ? 'চিত্র ভিত্তিক পরিমাপ' : 'Drawing-based')}
+              </span>
+            </div>
+            <button
+              onClick={() => setActiveTab('saved_records')}
+              className="shrink-0 h-full px-3 rounded-xl bg-white border-2 border-slate-300 text-slate-800 text-[15px] font-bold"
+            >
+              {isBn ? 'তালিকা' : 'List'}
+            </button>
+          </div>
+          <DrawingCanvas lang={lang} />
+        </div>
       ) : activeTab === 'gps_survey' ? (
         <>
           {/* MANDATORY LEGAL DISCLAIMER BANNER (TASK 10) */}
@@ -722,10 +828,10 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
             </h3>
             {surveys.length > 0 && (
               <button
-                onClick={() => setActiveTab('gps_survey')}
-                className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 flex items-center gap-1"
+                onClick={() => setActiveTab(SHOW_GPS ? 'gps_survey' : 'plots_survey')}
+                className="text-[15px] font-bold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 min-h-[44px] px-2"
               >
-                <span>{isBn ? '+ নতুন সার্ভে' : '+ New Survey'}</span>
+                <span>{isBn ? '+ নতুন জরিপ' : '+ New Survey'}</span>
               </button>
             )}
           </div>
@@ -788,15 +894,15 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
                 </p>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                   {isBn
-                    ? 'মাঠে রিয়েল GPS পয়েন্ট সংগ্রহ করে "রেকর্ড সংরক্ষণ করুন" বাটনে চাপ দিন।'
-                    : 'Collect real GPS coordinates in the field and tap "Save Record".'}
+                    ? 'বাহুভিত্তিক মাপ দিয়ে "সম্পন্ন" চাপলে জরিপ এখানে জমা হবে।'
+                    : 'Measure sides and tap "Done" to save a survey here.'}
                 </p>
               </div>
               <button
-                onClick={() => setActiveTab('gps_survey')}
-                className="px-4 py-2 rounded-xl bg-emerald-900 text-white text-xs font-bold hover:bg-emerald-950 transition"
+                onClick={() => setActiveTab(SHOW_GPS ? 'gps_survey' : 'plots_survey')}
+                className="px-5 min-h-[50px] rounded-xl bg-emerald-900 text-white text-[16px] font-bold hover:bg-emerald-950 transition"
               >
-                {isBn ? 'GPS জরিপ শুরু করুন' : 'Start GPS Survey'}
+                {isBn ? (SHOW_GPS ? 'GPS জরিপ শুরু করুন' : 'বাহু মেপে জরিপ শুরু করুন') : 'Start Survey'}
               </button>
             </div>
           ) : (
@@ -846,11 +952,23 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
 
                       {/* Status & Point Count */}
                       <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
-                          {formatNumberByLang(survey.points.length, lang)} {isBn ? 'পয়েন্ট' : 'pts'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          {survey.date}
+                        {SHOW_GPS ? (
+                          <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            {formatNumberByLang(survey.points.length, lang)} {isBn ? 'পয়েন্ট' : 'pts'}
+                          </span>
+                        ) : (
+                          <span
+                            className={`text-[13px] font-bold px-2.5 py-0.5 rounded-full border ${
+                              survey.status === 'draft'
+                                ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                            }`}
+                          >
+                            {survey.status === 'draft' ? 'খসড়া' : 'সম্পন্ন ✓'}
+                          </span>
+                        )}
+                        <span className="text-[13px] text-slate-500 font-semibold">
+                          {isBn ? toBnDigits(survey.date) : survey.date}
                         </span>
                       </div>
                     </div>
@@ -945,6 +1063,15 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
                           >
                             <Layers className="w-3 h-3" />
                             <span>{isBn ? 'ডিজিটাল নকশা' : 'Digital Drawing'}</span>
+                          </button>
+                        )}
+
+                        {survey.id.startsWith(BAHU_SURVEY_PREFIX) && (
+                          <button
+                            onClick={() => editBahuSurvey(survey)}
+                            className="text-[14px] font-bold text-emerald-900 bg-white border-2 border-emerald-700 px-3 min-h-[40px] rounded-lg flex items-center gap-1 transition active:scale-95"
+                          >
+                            ✎ <span>{isBn ? 'খুলুন / এডিট' : 'Open / Edit'}</span>
                           </button>
                         )}
 

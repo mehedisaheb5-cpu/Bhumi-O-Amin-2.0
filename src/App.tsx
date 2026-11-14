@@ -23,6 +23,15 @@ import { ChatModal } from './components/ChatModal';
 import { SidePanel, SideMenuId } from './components/fieldamin/SidePanel';
 import { ConverterScreen } from './components/fieldamin/ConverterScreen';
 import { ComingSoonScreen } from './components/fieldamin/ComingSoonScreen';
+import { FieldHomeScreen } from './components/fieldamin/FieldHomeScreen';
+
+/**
+ * ফিল্ড আমিন: পুরোনো অ্যাপের হোম (খতিয়ান, উত্তরাধিকার, দলিল, মৌজা ম্যাপ, AI চ্যাট কার্ড) লুকানো।
+ * কোড মুছে ফেলা হয়নি — true করলে ফিরে আসবে।
+ */
+const SHOW_LEGACY_HOME = false;
+/** দখল পরিমাপের সংরক্ষিত তালিকায় "ডিজিটাল নকশা" ও "মৌজা ম্যাপে যাচাই" বোতাম (পুরোনো ম্যাপ ফিচার) — লুকানো */
+const SHOW_LEGACY_MAP_LINKS = false;
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -500,7 +509,16 @@ export default function App() {
         }`}
       >
         {/* 1. HOME SCREEN — P1 Mobile: 5 cards (দখল / ম্যাপ 3 / খতিয়ান / উত্তরাধিকার / দলিল) */}
-        {currentScreen.screenId === 'home' && (
+        {currentScreen.screenId === 'home' && !SHOW_LEGACY_HOME && (
+          <FieldHomeScreen
+            surveys={surveys}
+            onOpenMeasure={() => navigateTo({ screenId: 'possession' })}
+            onOpenHandMap={() => navigateTo({ screenId: 'handmap' })}
+            onOpenReports={() => navigateTo({ screenId: 'reports' })}
+            onOpenSurvey={(sId) => navigateTo({ screenId: 'possession', surveyId: sId })}
+          />
+        )}
+        {currentScreen.screenId === 'home' && SHOW_LEGACY_HOME && (
           <HomeScreen
             lang={lang}
             onSelectMeasure={() => navigateTo({ screenId: 'possession' })}
@@ -544,14 +562,13 @@ export default function App() {
               bookingId={currentScreen.bookingId}
               initialSurveyId={currentScreen.surveyId}
               onSaveSurvey={handleSaveSurvey}
-              onOpenMapDrawing={(sId) =>
+              onOpenMapDrawing={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
                   mapsTab: 'cad_drawing',
                   surveyId: sId,
                   bookingId: currentScreen.bookingId,
-                })
-              }
+                })) : undefined}
               onOpenReport={(sId) =>
                 navigateTo({
                   screenId: 'reports',
@@ -559,14 +576,13 @@ export default function App() {
                   bookingId: currentScreen.bookingId,
                 })
               }
-              onOpenMouzaMap={(sId) =>
+              onOpenMouzaMap={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
                   mapsTab: 'mouza_dag',
                   surveyId: sId,
                   bookingId: currentScreen.bookingId,
-                })
-              }
+                })) : undefined}
             />
           </div>
         )}
@@ -635,14 +651,13 @@ export default function App() {
               bookingId={currentScreen.bookingId}
               initialSurveyId={currentScreen.surveyId}
               onSaveSurvey={handleSaveSurvey}
-              onOpenMapDrawing={(sId) =>
+              onOpenMapDrawing={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
                   mapsTab: 'cad_drawing',
                   surveyId: sId,
                   bookingId: currentScreen.bookingId,
-                })
-              }
+                })) : undefined}
               onOpenReport={(sId) =>
                 navigateTo({
                   screenId: 'reports',
@@ -650,14 +665,13 @@ export default function App() {
                   bookingId: currentScreen.bookingId,
                 })
               }
-              onOpenMouzaMap={(sId) =>
+              onOpenMouzaMap={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
                   mapsTab: 'mouza_dag',
                   surveyId: sId,
                   bookingId: currentScreen.bookingId,
-                })
-              }
+                })) : undefined}
             />
           </div>
         )}
