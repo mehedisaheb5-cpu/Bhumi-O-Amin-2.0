@@ -1,0 +1,440 @@
+import {
+  AdministrativeDivision,
+  AdministrativeDistrict,
+  AdministrativeUpazila,
+  AdministrativeUnion,
+  MouzaMetadataRecord,
+} from '../types/administrative-location';
+
+// 8 Administrative Divisions of Bangladesh (BBS Standard)
+export const BANGLADESH_DIVISIONS: AdministrativeDivision[] = [
+  { id: 'div-dhaka', code: '30', nameEn: 'Dhaka', nameBn: 'ঢাকা' },
+  { id: 'div-chattogram', code: '20', nameEn: 'Chattogram', nameBn: 'চট্টগ্রাম' },
+  { id: 'div-rajshahi', code: '50', nameEn: 'Rajshahi', nameBn: 'রাজশাহী' },
+  { id: 'div-khulna', code: '40', nameEn: 'Khulna', nameBn: 'খুলনা' },
+  { id: 'div-barishal', code: '10', nameEn: 'Barishal', nameBn: 'বরিশাল' },
+  { id: 'div-sylhet', code: '60', nameEn: 'Sylhet', nameBn: 'সিলেট' },
+  { id: 'div-rangpur', code: '55', nameEn: 'Rangpur', nameBn: 'রংপুর' },
+  { id: 'div-mymensingh', code: '45', nameEn: 'Mymensingh', nameBn: 'ময়মনসিংহ' },
+];
+
+// 64 Districts of Bangladesh grouped by Division
+export const BANGLADESH_DISTRICTS: AdministrativeDistrict[] = [
+  // Dhaka Division (13 districts)
+  { id: 'dist-dhaka', code: '26', divisionId: 'div-dhaka', nameEn: 'Dhaka', nameBn: 'ঢাকা' },
+  { id: 'dist-gazipur', code: '33', divisionId: 'div-dhaka', nameEn: 'Gazipur', nameBn: 'গাজীপুর' },
+  { id: 'dist-narayanganj', code: '67', divisionId: 'div-dhaka', nameEn: 'Narayanganj', nameBn: 'নারায়ণগঞ্জ' },
+  { id: 'dist-tangail', code: '93', divisionId: 'div-dhaka', nameEn: 'Tangail', nameBn: 'টাঙ্গাইল' },
+  { id: 'dist-kizoreganj', code: '48', divisionId: 'div-dhaka', nameEn: 'Kishoreganj', nameBn: 'কিশোরগঞ্জ' },
+  { id: 'dist-manikganj', code: '56', divisionId: 'div-dhaka', nameEn: 'Manikganj', nameBn: 'মানিকগঞ্জ' },
+  { id: 'dist-munshiganj', code: '59', divisionId: 'div-dhaka', nameEn: 'Munshiganj', nameBn: 'মুন্সীগঞ্জ' },
+  { id: 'dist-narsingdi', code: '68', divisionId: 'div-dhaka', nameEn: 'Narsingdi', nameBn: 'নরসিংদী' },
+  { id: 'dist-faridpur', code: '29', divisionId: 'div-dhaka', nameEn: 'Faridpur', nameBn: 'ফরিদপুর' },
+  { id: 'dist-gopalganj', code: '35', divisionId: 'div-dhaka', nameEn: 'Gopalganj', nameBn: 'গোপালগঞ্জ' },
+  { id: 'dist-madaripur', code: '54', divisionId: 'div-dhaka', nameEn: 'Madaripur', nameBn: 'মাদারীপুর' },
+  { id: 'dist-rajbari', code: '82', divisionId: 'div-dhaka', nameEn: 'Rajbari', nameBn: 'রাজবাড়ী' },
+  { id: 'dist-shariatpur', code: '86', divisionId: 'div-dhaka', nameEn: 'Shariatpur', nameBn: 'শরীয়তপুর' },
+
+  // Chattogram Division (11 districts)
+  { id: 'dist-chattogram', code: '15', divisionId: 'div-chattogram', nameEn: 'Chattogram', nameBn: 'চট্টগ্রাম' },
+  { id: 'dist-coxsbazar', code: '22', divisionId: 'div-chattogram', nameEn: "Cox's Bazar", nameBn: 'কক্সবাজার' },
+  { id: 'dist-cumilla', code: '19', divisionId: 'div-chattogram', nameEn: 'Cumilla', nameBn: 'কুমিল্লা' },
+  { id: 'dist-feni', code: '30', divisionId: 'div-chattogram', nameEn: 'Feni', nameBn: 'ফেনী' },
+  { id: 'dist-brahmanbaria', code: '12', divisionId: 'div-chattogram', nameEn: 'Brahmanbaria', nameBn: 'ব্রাহ্মণবাড়িয়া' },
+  { id: 'dist-chandpur', code: '13', divisionId: 'div-chattogram', nameEn: 'Chandpur', nameBn: 'চাঁদপুর' },
+  { id: 'dist-lakshmipur', code: '51', divisionId: 'div-chattogram', nameEn: 'Lakshmipur', nameBn: 'লক্ষ্মীপুর' },
+  { id: 'dist-noakhali', code: '75', divisionId: 'div-chattogram', nameEn: 'Noakhali', nameBn: 'নোয়াখালী' },
+  { id: 'dist-khagrachhari', code: '46', divisionId: 'div-chattogram', nameEn: 'Khagrachhari', nameBn: 'খাগড়াছড়ি' },
+  { id: 'dist-rangamati', code: '84', divisionId: 'div-chattogram', nameEn: 'Rangamati', nameBn: 'রাঙ্গামাটি' },
+  { id: 'dist-bandarban', code: '03', divisionId: 'div-chattogram', nameEn: 'Bandarban', nameBn: 'বান্দরবান' },
+
+  // Rajshahi Division (8 districts)
+  { id: 'dist-rajshahi', code: '81', divisionId: 'div-rajshahi', nameEn: 'Rajshahi', nameBn: 'রাজশাহী' },
+  { id: 'dist-bogura', code: '10', divisionId: 'div-rajshahi', nameEn: 'Bogura', nameBn: 'বগুড়া' },
+  { id: 'dist-pabna', code: '76', divisionId: 'div-rajshahi', nameEn: 'Pabna', nameBn: 'পাবনা' },
+  { id: 'dist-sirajganj', code: '88', divisionId: 'div-rajshahi', nameEn: 'Sirajganj', nameBn: 'সিরাজগঞ্জ' },
+  { id: 'dist-naogaon', code: '64', divisionId: 'div-rajshahi', nameEn: 'Naogaon', nameBn: 'নওগাঁ' },
+  { id: 'dist-natore', code: '69', divisionId: 'div-rajshahi', nameEn: 'Natore', nameBn: 'নাটোর' },
+  { id: 'dist-chapai-nawabganj', code: '70', divisionId: 'div-rajshahi', nameEn: 'Chapai Nawabganj', nameBn: 'চাঁপাইনবাবগঞ্জ' },
+  { id: 'dist-joypurhat', code: '38', divisionId: 'div-rajshahi', nameEn: 'Joypurhat', nameBn: 'জয়পুরহাট' },
+
+  // Khulna Division (10 districts)
+  { id: 'dist-khulna', code: '47', divisionId: 'div-khulna', nameEn: 'Khulna', nameBn: 'খুলনা' },
+  { id: 'dist-jashore', code: '41', divisionId: 'div-khulna', nameEn: 'Jashore', nameBn: 'যশোর' },
+  { id: 'dist-satkhira', code: '87', divisionId: 'div-khulna', nameEn: 'Satkhira', nameBn: 'সাতক্ষীরা' },
+  { id: 'dist-bagerhat', code: '01', divisionId: 'div-khulna', nameEn: 'Bagerhat', nameBn: 'বাগেরহাট' },
+  { id: 'dist-kushtia', code: '50', divisionId: 'div-khulna', nameEn: 'Kushtia', nameBn: 'কুষ্টিয়া' },
+  { id: 'dist-jhenaidah', code: '44', divisionId: 'div-khulna', nameEn: 'Jhenaidah', nameBn: 'ঝিনাইদহ' },
+  { id: 'dist-chuadanga', code: '18', divisionId: 'div-khulna', nameEn: 'Chuadanga', nameBn: 'চুয়াডাঙ্গা' },
+  { id: 'dist-magura', code: '55', divisionId: 'div-khulna', nameEn: 'Magura', nameBn: 'মাগুরা' },
+  { id: 'dist-meherpur', code: '57', divisionId: 'div-khulna', nameEn: 'Meherpur', nameBn: 'মেহেরপুর' },
+  { id: 'dist-narail', code: '65', divisionId: 'div-khulna', nameEn: 'Narail', nameBn: 'নড়াইল' },
+
+  // Barishal Division (6 districts)
+  { id: 'dist-barishal', code: '06', divisionId: 'div-barishal', nameEn: 'Barishal', nameBn: 'বরিশাল' },
+  { id: 'dist-bhola', code: '09', divisionId: 'div-barishal', nameEn: 'Bhola', nameBn: 'ভোলা' },
+  { id: 'dist-patuakhali', code: '78', divisionId: 'div-barishal', nameEn: 'Patuakhali', nameBn: 'পটুয়াখালী' },
+  { id: 'dist-pirojpur', code: '79', divisionId: 'div-barishal', nameEn: 'Pirojpur', nameBn: 'পিরোজপুর' },
+  { id: 'dist-barguna', code: '04', divisionId: 'div-barishal', nameEn: 'Barguna', nameBn: 'বরগুনা' },
+  { id: 'dist-jhalakathi', code: '42', divisionId: 'div-barishal', nameEn: 'Jhalakathi', nameBn: 'ঝালকাঠি' },
+
+  // Sylhet Division (4 districts)
+  { id: 'dist-sylhet', code: '91', divisionId: 'div-sylhet', nameEn: 'Sylhet', nameBn: 'সিলেট' },
+  { id: 'dist-moulvibazar', code: '58', divisionId: 'div-sylhet', nameEn: 'Moulvibazar', nameBn: 'মৌলভীবাজার' },
+  { id: 'dist-habiganj', code: '36', divisionId: 'div-sylhet', nameEn: 'Habiganj', nameBn: 'হবিগঞ্জ' },
+  { id: 'dist-sunamganj', code: '90', divisionId: 'div-sylhet', nameEn: 'Sunamganj', nameBn: 'সুনামগঞ্জ' },
+
+  // Rangpur Division (8 districts)
+  { id: 'dist-rangpur', code: '85', divisionId: 'div-rangpur', nameEn: 'Rangpur', nameBn: 'রংপুর' },
+  { id: 'dist-dinajpur', code: '27', divisionId: 'div-rangpur', nameEn: 'Dinajpur', nameBn: 'দিনাজপুর' },
+  { id: 'dist-gaibandha', code: '32', divisionId: 'div-rangpur', nameEn: 'Gaibandha', nameBn: 'গাইবান্ধা' },
+  { id: 'dist-kurigram', code: '49', divisionId: 'div-rangpur', nameEn: 'Kurigram', nameBn: 'কুড়িগ্রাম' },
+  { id: 'dist-lalmonirhat', code: '52', divisionId: 'div-rangpur', nameEn: 'Lalmonirhat', nameBn: 'লালমনিরহাট' },
+  { id: 'dist-nilphamari', code: '73', divisionId: 'div-rangpur', nameEn: 'Nilphamari', nameBn: 'নীলফামারী' },
+  { id: 'dist-panchagarh', code: '77', divisionId: 'div-rangpur', nameEn: 'Panchagarh', nameBn: 'পঞ্চগড়' },
+  { id: 'dist-thakurgaon', code: '94', divisionId: 'div-rangpur', nameEn: 'Thakurgaon', nameBn: 'ঠাকুরগাঁও' },
+
+  // Mymensingh Division (4 districts)
+  { id: 'dist-mymensingh', code: '61', divisionId: 'div-mymensingh', nameEn: 'Mymensingh', nameBn: 'ময়মনসিংহ' },
+  { id: 'dist-jamalpur', code: '39', divisionId: 'div-mymensingh', nameEn: 'Jamalpur', nameBn: 'জামালপুর' },
+  { id: 'dist-netrokona', code: '72', divisionId: 'div-mymensingh', nameEn: 'Netrokona', nameBn: 'নেত্রকোণা' },
+  { id: 'dist-sherpur', code: '89', divisionId: 'div-mymensingh', nameEn: 'Sherpur', nameBn: 'শেরপুর' },
+];
+
+// Upazilas & Thanas for Districts
+export const BANGLADESH_UPAZILAS: AdministrativeUpazila[] = [
+  // Dhaka District Upazilas & Major Thanas
+  { id: 'upz-savar', code: '2672', districtId: 'dist-dhaka', nameEn: 'Savar', nameBn: 'সাভার' },
+  { id: 'upz-dhamrai', code: '2614', districtId: 'dist-dhaka', nameEn: 'Dhamrai', nameBn: 'ধামরাই' },
+  { id: 'upz-keraniganj', code: '2638', districtId: 'dist-dhaka', nameEn: 'Keraniganj', nameBn: 'কেরানীগঞ্জ' },
+  { id: 'upz-nawabganj', code: '2662', districtId: 'dist-dhaka', nameEn: 'Nawabganj', nameBn: 'নবাবগঞ্জ' },
+  { id: 'upz-dohar', code: '2618', districtId: 'dist-dhaka', nameEn: 'Dohar', nameBn: 'দোহার' },
+  { id: 'upz-tejgaon', code: '2690', districtId: 'dist-dhaka', nameEn: 'Tejgaon', nameBn: 'তেজগাঁও' },
+  { id: 'upz-mirpur', code: '2650', districtId: 'dist-dhaka', nameEn: 'Mirpur', nameBn: 'মিরপুর' },
+  { id: 'upz-gulshan', code: '2626', districtId: 'dist-dhaka', nameEn: 'Gulshan', nameBn: 'গুলশান' },
+  { id: 'upz-dhanmondi', code: '2616', districtId: 'dist-dhaka', nameEn: 'Dhanmondi', nameBn: 'ধানমন্ডি' },
+  { id: 'upz-khilgaon', code: '2640', districtId: 'dist-dhaka', nameEn: 'Khilgaon', nameBn: 'খিলগাঁও' },
+  { id: 'upz-badda', code: '2604', districtId: 'dist-dhaka', nameEn: 'Badda', nameBn: 'বাড্ডা' },
+  { id: 'upz-uttara', code: '2695', districtId: 'dist-dhaka', nameEn: 'Uttara', nameBn: 'উত্তরা' },
+  { id: 'upz-motijheel', code: '2655', districtId: 'dist-dhaka', nameEn: 'Motijheel', nameBn: 'মতিঝিল' },
+  { id: 'upz-lalbagh', code: '2645', districtId: 'dist-dhaka', nameEn: 'Lalbagh', nameBn: 'লালবাগ' },
+  { id: 'upz-demra', code: '2612', districtId: 'dist-dhaka', nameEn: 'Demra', nameBn: 'ডেমরা' },
+
+  // Gazipur District
+  { id: 'upz-gazipur-sadar', code: '3330', districtId: 'dist-gazipur', nameEn: 'Gazipur Sadar', nameBn: 'গাজীপুর সদর' },
+  { id: 'upz-kaliakair', code: '3332', districtId: 'dist-gazipur', nameEn: 'Kaliakair', nameBn: 'কালিয়াকৈর' },
+  { id: 'upz-kapasia', code: '3334', districtId: 'dist-gazipur', nameEn: 'Kapasia', nameBn: 'কাপাসিয়া' },
+  { id: 'upz-sreepur', code: '3336', districtId: 'dist-gazipur', nameEn: 'Sreepur', nameBn: 'শ্রীপুর' },
+  { id: 'upz-kaliganj-gaz', code: '3338', districtId: 'dist-gazipur', nameEn: 'Kaliganj', nameBn: 'কালীগঞ্জ' },
+
+  // Narayanganj District
+  { id: 'upz-narayanganj-sadar', code: '6758', districtId: 'dist-narayanganj', nameEn: 'Narayanganj Sadar', nameBn: 'নারায়ণগঞ্জ সদর' },
+  { id: 'upz-rupganj', code: '6768', districtId: 'dist-narayanganj', nameEn: 'Rupganj', nameBn: 'রূপগঞ্জ' },
+  { id: 'upz-sonargaon', code: '6788', districtId: 'dist-narayanganj', nameEn: 'Sonargaon', nameBn: 'সোনারগাঁও' },
+  { id: 'upz-araihazar', code: '6702', districtId: 'dist-narayanganj', nameEn: 'Araihazar', nameBn: 'আড়াইহাজার' },
+  { id: 'upz-bandar', code: '6704', districtId: 'dist-narayanganj', nameEn: 'Bandar', nameBn: 'বন্দর' },
+
+  // Feni District
+  { id: 'upz-feni-sadar', code: '3029', districtId: 'dist-feni', nameEn: 'Feni Sadar', nameBn: 'ফেনী সদর' },
+  { id: 'upz-daganbhuiyan', code: '3014', districtId: 'dist-feni', nameEn: 'Daganbhuiyan', nameBn: 'দাগনভূঞা' },
+  { id: 'upz-chagalnaiya', code: '3019', districtId: 'dist-feni', nameEn: 'Chhagalnaiya', nameBn: 'ছাগলনাইয়া' },
+  { id: 'upz-sonagazi', code: '3094', districtId: 'dist-feni', nameEn: 'Sonagazi', nameBn: 'সোনাগাজী' },
+  { id: 'upz-parshuram', code: '3051', districtId: 'dist-feni', nameEn: 'Parshuram', nameBn: 'পরশুরাম' },
+  { id: 'upz-fulgazi', code: '3025', districtId: 'dist-feni', nameEn: 'Fulgazi', nameBn: 'ফুলগাজী' },
+
+  // Cumilla District
+  { id: 'upz-cumilla-adarsha-sadar', code: '1933', districtId: 'dist-cumilla', nameEn: 'Adarsha Sadar', nameBn: 'আদর্শ সদর' },
+  { id: 'upz-cumilla-sadar-south', code: '1934', districtId: 'dist-cumilla', nameEn: 'Sadar South', nameBn: 'সদর দক্ষিণ' },
+  { id: 'upz-chandina', code: '1915', districtId: 'dist-cumilla', nameEn: 'Chandina', nameBn: 'চান্দিনা' },
+  { id: 'upz-daudkandi', code: '1927', districtId: 'dist-cumilla', nameEn: 'Daudkandi', nameBn: 'দাউদকান্দি' },
+  { id: 'upz-burichang', code: '1909', districtId: 'dist-cumilla', nameEn: 'Burichang', nameBn: 'বুড়িচং' },
+  { id: 'upz-brahmanpara', code: '1907', districtId: 'dist-cumilla', nameEn: 'Brahmanpara', nameBn: 'ব্রাহ্মণপাড়া' },
+  { id: 'upz-debidwar', code: '1931', districtId: 'dist-cumilla', nameEn: 'Debidwar', nameBn: 'দেবীদ্বার' },
+  { id: 'upz-laksham', code: '1972', districtId: 'dist-cumilla', nameEn: 'Laksham', nameBn: 'লাকসাম' },
+  { id: 'upz-chauddagram', code: '1923', districtId: 'dist-cumilla', nameEn: 'Chauddagram', nameBn: 'চৌদ্দগ্রাম' },
+
+  // Chattogram District
+  { id: 'upz-panchlaish', code: '1553', districtId: 'dist-chattogram', nameEn: 'Panchlaish', nameBn: 'পাঁচলাইশ' },
+  { id: 'upz-khulshi', code: '1540', districtId: 'dist-chattogram', nameEn: 'Khulshi', nameBn: 'খুলশী' },
+  { id: 'upz-kotwali-ctg', code: '1543', districtId: 'dist-chattogram', nameEn: 'Kotwali', nameBn: 'কোতোয়ালী' },
+  { id: 'upz-bakalia', code: '1504', districtId: 'dist-chattogram', nameEn: 'Bakalia', nameBn: 'বাকলিয়া' },
+  { id: 'upz-hathazari', code: '1537', districtId: 'dist-chattogram', nameEn: 'Hathazari', nameBn: 'হাটহাজারী' },
+  { id: 'upz-sitakunda', code: '1586', districtId: 'dist-chattogram', nameEn: 'Sitakunda', nameBn: 'সীতাকুণ্ড' },
+  { id: 'upz-mirsharai', code: '1550', districtId: 'dist-chattogram', nameEn: 'Mirsharai', nameBn: 'মীরসরাই' },
+  { id: 'upz-patiya', code: '1555', districtId: 'dist-chattogram', nameEn: 'Patiya', nameBn: 'পটিয়া' },
+  { id: 'upz-boalkhali', code: '1508', districtId: 'dist-chattogram', nameEn: 'Boalkhali', nameBn: 'বোয়ালখালী' },
+  { id: 'upz-anwara', code: '1503', districtId: 'dist-chattogram', nameEn: 'Anwara', nameBn: 'আনোয়ারা' },
+
+  // Sylhet District
+  { id: 'upz-sylhet-sadar', code: '9162', districtId: 'dist-sylhet', nameEn: 'Sylhet Sadar', nameBn: 'সিলেট সদর' },
+  { id: 'upz-beanibazar', code: '9117', districtId: 'dist-sylhet', nameEn: 'Beanibazar', nameBn: 'বিয়ানীবাজার' },
+  { id: 'upz-golapganj', code: '9138', districtId: 'dist-sylhet', nameEn: 'Golapganj', nameBn: 'গোলাপগঞ্জ' },
+  { id: 'upz-biswanath', code: '9120', districtId: 'dist-sylhet', nameEn: 'Biswanath', nameBn: 'বিশ্বনাথ' },
+  { id: 'upz-fenchuganj', code: '9135', districtId: 'dist-sylhet', nameEn: 'Fenchuganj', nameBn: 'ফেঞ্চুগঞ্জ' },
+
+  // Rajshahi District
+  { id: 'upz-boalia', code: '8110', districtId: 'dist-rajshahi', nameEn: 'Boalia', nameBn: 'বোয়ালিয়া' },
+  { id: 'upz-rajpara', code: '8170', districtId: 'dist-rajshahi', nameEn: 'Rajpara', nameBn: 'রাজপাড়া' },
+  { id: 'upz-motihar', code: '8155', districtId: 'dist-rajshahi', nameEn: 'Motihar', nameBn: 'মতিহার' },
+  { id: 'upz-paba', code: '8165', districtId: 'dist-rajshahi', nameEn: 'Paba', nameBn: 'পবা' },
+  { id: 'upz-godagari', code: '8130', districtId: 'dist-rajshahi', nameEn: 'Godagari', nameBn: 'গোদাগাড়ী' },
+  { id: 'upz-bagmara', code: '8105', districtId: 'dist-rajshahi', nameEn: 'Bagmara', nameBn: 'বাগমারা' },
+
+  // Bogura District
+  { id: 'upz-bogura-sadar', code: '1020', districtId: 'dist-bogura', nameEn: 'Bogura Sadar', nameBn: 'বগুড়া সদর' },
+  { id: 'upz-shajahanpur', code: '1088', districtId: 'dist-bogura', nameEn: 'Shajahanpur', nameBn: 'শাজাহানপুর' },
+  { id: 'upz-sherpur-bog', code: '1085', districtId: 'dist-bogura', nameEn: 'Sherpur', nameBn: 'শেরপুর' },
+  { id: 'upz-shibganj', code: '1089', districtId: 'dist-bogura', nameEn: 'Shibganj', nameBn: 'শিবগঞ্জ' },
+
+  // Khulna District
+  { id: 'upz-khulna-sadar', code: '4740', districtId: 'dist-khulna', nameEn: 'Khulna Sadar', nameBn: 'খুলনা সদর' },
+  { id: 'upz-sonadanga', code: '4775', districtId: 'dist-khulna', nameEn: 'Sonadanga', nameBn: 'সোনাডাঙ্গা' },
+  { id: 'upz-khalishpur', code: '4735', districtId: 'dist-khulna', nameEn: 'Khalishpur', nameBn: 'খালিশপুর' },
+  { id: 'upz-daulatpur', code: '4712', districtId: 'dist-khulna', nameEn: 'Daulatpur', nameBn: 'দৌলতপুর' },
+  { id: 'upz-dumuria', code: '4717', districtId: 'dist-khulna', nameEn: 'Dumuria', nameBn: 'ডুমুরিয়া' },
+  { id: 'upz-batiaghata', code: '4705', districtId: 'dist-khulna', nameEn: 'Batiaghata', nameBn: 'বটিয়াঘাটা' },
+
+  // Barishal District
+  { id: 'upz-barishal-sadar', code: '0607', districtId: 'dist-barishal', nameEn: 'Barishal Sadar', nameBn: 'বরিশাল সদর' },
+  { id: 'upz-babuganj', code: '0602', districtId: 'dist-barishal', nameEn: 'Babuganj', nameBn: 'বাবুগঞ্জ' },
+  { id: 'upz-bakerganj', code: '0603', districtId: 'dist-barishal', nameEn: 'Bakerganj', nameBn: 'বাকেরগঞ্জ' },
+  { id: 'upz-wazirpur', code: '0694', districtId: 'dist-barishal', nameEn: 'Wazirpur', nameBn: 'উজিরপুর' },
+
+  // Rangpur District
+  { id: 'upz-rangpur-sadar', code: '8576', districtId: 'dist-rangpur', nameEn: 'Rangpur Sadar', nameBn: 'রংপুর সদর' },
+  { id: 'upz-mithapukur', code: '8558', districtId: 'dist-rangpur', nameEn: 'Mithapukur', nameBn: 'মিঠাপুকুর' },
+  { id: 'upz-pirganj-ran', code: '8566', districtId: 'dist-rangpur', nameEn: 'Pirganj', nameBn: 'পীরগঞ্জ' },
+  { id: 'upz-badarganj', code: '8503', districtId: 'dist-rangpur', nameEn: 'Badarganj', nameBn: 'বদরগঞ্জ' },
+
+  // Mymensingh District
+  { id: 'upz-mymensingh-sadar', code: '6152', districtId: 'dist-mymensingh', nameEn: 'Mymensingh Sadar', nameBn: 'ময়মনসিংহ সদর' },
+  { id: 'upz-muktagachha', code: '6165', districtId: 'dist-mymensingh', nameEn: 'Muktagachha', nameBn: 'মুক্তাগাছা' },
+  { id: 'upz-trishal', code: '6194', districtId: 'dist-mymensingh', nameEn: 'Trishal', nameBn: 'ত্রিশাল' },
+  { id: 'upz-bhaluka', code: '6120', districtId: 'dist-mymensingh', nameEn: 'Bhaluka', nameBn: 'ভালুকা' },
+];
+
+// Sample Starter Mouza Records
+// NOTE: Clearly labeled with source: 'demo_sample' and isDemo: true.
+// As mandated: "Demo data-কে clearly Demo হিসেবে label করো। Verified dataset import করার জন্য scalable JSON/CSV/API architecture তৈরি করো।"
+export const STARTER_SAMPLE_MOUZAS: MouzaMetadataRecord[] = [
+  // Dhaka - Savar
+  {
+    id: 'mouza-dhaka-savar-24-rs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-savar',
+    upazilaNameBn: 'সাভার',
+    mouzaNameEn: 'Savar',
+    mouzaNameBn: 'সাভার',
+    jlNo: '২৪',
+    surveyType: 'RS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+    notes: 'ডেমো স্যাম্পল রেকর্ড — বাস্তব ব্যবহারের জন্য সরকারি জেএল বই বা সার্টিফাইড মৌজা লিস্ট প্রযোজ্য',
+  },
+  {
+    id: 'mouza-dhaka-savar-27-rs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-savar',
+    upazilaNameBn: 'সাভার',
+    mouzaNameEn: 'Genda',
+    mouzaNameBn: 'গেন্ডা',
+    jlNo: '২৭',
+    surveyType: 'RS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+  {
+    id: 'mouza-dhaka-savar-18-bs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-savar',
+    upazilaNameBn: 'সাভার',
+    mouzaNameEn: 'Bank Colony',
+    mouzaNameBn: 'ব্যাংক কলোনি',
+    jlNo: '১৮',
+    surveyType: 'BS',
+    sheetNumber: '০২',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Dhaka - Khilgaon
+  {
+    id: 'mouza-dhaka-khilgaon-288-cs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-khilgaon',
+    upazilaNameBn: 'খিলগাঁও',
+    mouzaNameEn: 'Khilgaon',
+    mouzaNameBn: 'খিলগাঁও',
+    jlNo: '২৮৮',
+    surveyType: 'CS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+  {
+    id: 'mouza-dhaka-khilgaon-288-rs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-khilgaon',
+    upazilaNameBn: 'খিলগাঁও',
+    mouzaNameEn: 'Khilgaon',
+    mouzaNameBn: 'খিলগাঁও',
+    jlNo: '২৮৮',
+    surveyType: 'RS',
+    sheetNumber: '০৩',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Dhaka - Tejgaon
+  {
+    id: 'mouza-dhaka-tejgaon-238-cs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-tejgaon',
+    upazilaNameBn: 'তেজগাঁও',
+    mouzaNameEn: 'Tejgaon',
+    mouzaNameBn: 'তেজগাঁও',
+    jlNo: '২৩৮',
+    surveyType: 'CS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Dhaka - Badda
+  {
+    id: 'mouza-dhaka-badda-261-rs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-badda',
+    upazilaNameBn: 'বাড্ডা',
+    mouzaNameEn: 'Badda',
+    mouzaNameBn: 'বাড্ডা',
+    jlNo: '২৬১',
+    surveyType: 'RS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Dhaka - Mirpur
+  {
+    id: 'mouza-dhaka-mirpur-10-rs',
+    divisionId: 'div-dhaka',
+    divisionNameBn: 'ঢাকা',
+    districtId: 'dist-dhaka',
+    districtNameBn: 'ঢাকা',
+    upazilaId: 'upz-mirpur',
+    upazilaNameBn: 'মিরপুর',
+    mouzaNameEn: 'Senpara Parbata',
+    mouzaNameBn: 'সেনপাড়া পর্বতা',
+    jlNo: '১০',
+    surveyType: 'RS',
+    sheetNumber: '০২',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Feni - Feni Sadar
+  {
+    id: 'mouza-feni-sadar-45-cs',
+    divisionId: 'div-chattogram',
+    divisionNameBn: 'চট্টগ্রাম',
+    districtId: 'dist-feni',
+    districtNameBn: 'ফেনী',
+    upazilaId: 'upz-feni-sadar',
+    upazilaNameBn: 'ফেনী সদর',
+    mouzaNameEn: 'Rampur',
+    mouzaNameBn: 'রামপুর',
+    jlNo: '৪৫',
+    surveyType: 'CS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+  {
+    id: 'mouza-feni-sadar-42-bs',
+    divisionId: 'div-chattogram',
+    divisionNameBn: 'চট্টগ্রাম',
+    districtId: 'dist-feni',
+    districtNameBn: 'ফেনী',
+    upazilaId: 'upz-feni-sadar',
+    upazilaNameBn: 'ফেনী সদর',
+    mouzaNameEn: 'Barahipur',
+    mouzaNameBn: 'বারাহীপুর',
+    jlNo: '৪২',
+    surveyType: 'BS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Cumilla - Adarsha Sadar
+  {
+    id: 'mouza-cumilla-sadar-12-rs',
+    divisionId: 'div-chattogram',
+    divisionNameBn: 'চট্টগ্রাম',
+    districtId: 'dist-cumilla',
+    districtNameBn: 'কুমিল্লা',
+    upazilaId: 'upz-cumilla-adarsha-sadar',
+    upazilaNameBn: 'আদর্শ সদর',
+    mouzaNameEn: 'Kandirpar',
+    mouzaNameBn: 'কান্দিরপাড়',
+    jlNo: '১২',
+    surveyType: 'RS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+
+  // Chattogram - Panchlaish
+  {
+    id: 'mouza-ctg-panchlaish-18-bs',
+    divisionId: 'div-chattogram',
+    divisionNameBn: 'চট্টগ্রাম',
+    districtId: 'dist-chattogram',
+    districtNameBn: 'চট্টগ্রাম',
+    upazilaId: 'upz-panchlaish',
+    upazilaNameBn: 'পাঁচলাইশ',
+    mouzaNameEn: 'Nasirabad',
+    mouzaNameBn: 'নাসিরাবাদ',
+    jlNo: '১৮',
+    surveyType: 'BS',
+    sheetNumber: '০১',
+    source: 'demo_sample',
+    isDemo: true,
+    lastVerifiedDate: '2026-01-15',
+  },
+];

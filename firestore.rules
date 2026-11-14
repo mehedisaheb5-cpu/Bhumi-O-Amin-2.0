@@ -1,0 +1,344 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default-deny catch-all (First Rule)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Master Admin check (bootstrapped owner email and admin database collection)
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && (request.auth.token.email == 'Mehedifeni33@gmail.com' || request.auth.token.email == 'mehedifeni33@gmail.com')) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isAmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/aminProfiles/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/amins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'amin') ||
+        isAdmin()
+      );
+    }
+
+    // 1. USERS COLLECTION
+    // Customer, Amin, Admin accounts.
+    // Prevents privilege escalation: non-admins cannot self-promote to 'admin' or alter roles/statuses.
+    match /users/{userId} {
+      allow get: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(userId) && (
+        (request.resource.data.role != 'admin') || isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        // Regular user cannot change their role, status, id, or email
+        (isOwner(userId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'id', 'email'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 2. AMIN PROFILES & DIRECTORY
+    // Public directory read for verified amins.
+    // Amins can manage bio/services; only platform admin can verify/suspend or alter ratings/job counts.
+    match /aminProfiles/{aminId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && (
+        (isOwner(aminId) && request.resource.data.verificationStatus == 'pending') ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (isOwner(aminId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationStatus', 'ratingAverage', 'rating', 'completedJobs', 'completedJobsCount', 'userId', 'id'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /amins/{aminId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && (
+        (isOwner(aminId) && request.resource.data.verificationStatus == 'pending') ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (isOwner(aminId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationStatus', 'ratingAverage', 'rating', 'completedJobs', 'completedJobsCount', 'userId', 'id'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 3. CUSTOMER PROFILES (Private PII)
+    match /customerProfiles/{customerId} {
+      allow get: if isSignedIn() && (isOwner(customerId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isOwner(customerId);
+      allow update: if isSignedIn() && (
+        (isOwner(customerId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['userId', 'id'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 4. SERVICES CATALOG
+    match /services/{serviceId} {
+      allow get, list: if true; // Public catalog for browsing
+      allow write: if isAdmin(); // Only platform admin can configure services and fees
+    }
+
+    // 5. BOOKINGS
+    // Customers can read/create their own bookings.
+    // Assigned Amin can view and update work notes/status.
+    // Admin has full supervision and assignment authority.
+    match /bookings/{bookingId} {
+      allow get: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.assignedAminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.assignedAminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        (request.resource.data.customerId == request.auth.uid &&
+         (!('assignedAminId' in request.resource.data) || request.resource.data.assignedAminId == null) &&
+         request.resource.data.status == 'pending') ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        // Customer can only cancel or update their own requirements, cannot reassign surveyor
+        (resource.data.customerId == request.auth.uid &&
+         request.resource.data.customerId == resource.data.customerId &&
+         ((!('assignedAminId' in request.resource.data) && !('assignedAminId' in resource.data)) || (request.resource.data.assignedAminId == resource.data.assignedAminId)) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'surveyRequirements', 'updatedAt', 'clientNotes', 'customer']) &&
+         (request.resource.data.status == resource.data.status || request.resource.data.status == 'cancelled')) ||
+        
+        // Assigned surveyor can update work notes and progress status, but cannot mark completed directly
+        (resource.data.assignedAminId == request.auth.uid &&
+         request.resource.data.customerId == resource.data.customerId &&
+         request.resource.data.assignedAminId == resource.data.assignedAminId &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'scheduledDate', 'aminNotes', 'linkedSurveyId', 'linkedReportId', 'statusHistory', 'updatedAt']) &&
+         request.resource.data.status in ['amin_accepted', 'scheduled', 'field_work', 'processing', 'quality_check', 'pending']) ||
+        
+        // Admin has full supervision and assignment power
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 6. ASSIGNMENTS
+    match /assignments/{assignmentId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (
+        (resource.data.aminId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'rejectionReason', 'updatedAt'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 7. SURVEY RECORDS (GPS geometry & calculation points)
+    match /surveyRecords/{surveyId} {
+      allow get: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin() ||
+        (resource.data.bookingId != null && exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId)) && (
+          get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.assignedAminId == request.auth.uid ||
+          get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.customerId == request.auth.uid
+        ))
+      );
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.customerId == request.auth.uid ||
+        resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        request.resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId) ||
+        isAdmin() ||
+        (resource.data.bookingId != null && exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId)) && get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.assignedAminId == request.auth.uid)
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // 8. SURVEY REPORTS (A4 Certification Reports)
+    match /reports/{reportId} {
+      allow get: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin() ||
+        (resource.data.bookingId != null && exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId)) && (
+          get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.assignedAminId == request.auth.uid ||
+          get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.customerId == request.auth.uid
+        ))
+      );
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.customerId == request.auth.uid ||
+        resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        request.resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 9. DIGITAL DRAWINGS & PENTAGRAPH PROJECTS (2D Cadastral Plot Sketches & Comparative Overlays)
+    match /drawings/{drawingId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    match /pentagraphProjects/{projectId} {
+      allow get: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin() ||
+        (resource.data.bookingId != null && exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId)) && (
+          get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.assignedAminId == request.auth.uid ||
+          get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.customerId == request.auth.uid
+        ))
+      );
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        resource.data.customerId == request.auth.uid ||
+        resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        request.resource.data.aminId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId) ||
+        isAdmin() ||
+        (resource.data.bookingId != null && exists(/databases/$(database)/documents/bookings/$(resource.data.bookingId)) && get(/databases/$(database)/documents/bookings/$(resource.data.bookingId)).data.assignedAminId == request.auth.uid)
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    // 10. PAYMENTS
+    match /payments/{paymentId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.customerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // 11. RATINGS
+    match /ratings/{ratingId} {
+      allow get, list: if true; // Public reviews
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // 12. COMPLAINTS & DISPUTES
+    match /complaints/{complaintId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.customerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && request.resource.data.customerId == request.auth.uid;
+      allow update: if isAdmin(); // Only admin can investigate and resolve complaints
+      allow delete: if isAdmin();
+    }
+
+    // 13. AUDIT LOGS (Immutable append-only for admins & verified operations)
+    match /auditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() && (
+        request.resource.data.actorUserId == request.auth.uid ||
+        request.resource.data.uid == request.auth.uid ||
+        isAdmin()
+      ) && !request.resource.data.keys().hasAny(['password', 'secret', 'token', 'apiKey']);
+      allow update, delete: if false; // Strict immutability
+    }
+
+    // 14. IN-APP NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.recipientUid == request.auth.uid ||
+        isAdmin() ||
+        (resource.data.recipientRole != null && (
+          (resource.data.recipientRole == 'amin' && isAmin()) ||
+          (resource.data.recipientRole == 'customer') ||
+          (resource.data.recipientRole == 'admin' && isAdmin())
+        ))
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        (resource.data.recipientUid == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // 15. SCANNED MOUZA MAP LIBRARY
+    match /mouzaMaps/{mapId} {
+      // Authenticated users (customers, amins, admins) can search and view available maps
+      allow get, list: if isSignedIn();
+      // Only Admin can upload, verify, or delete official cadastral maps
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 16. EXTERNAL SOURCE DIRECTORY
+    match /externalSources/{sourceId} {
+      allow get, list: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}
