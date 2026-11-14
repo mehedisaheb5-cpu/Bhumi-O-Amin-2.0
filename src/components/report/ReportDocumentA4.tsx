@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { SurveyReportRecord, Language, SurveyDrawing, PlotMeta } from '../../types';
 import { formatNumberByLang, roundClean } from '../../lib/land-units';
 import { printWithNoto } from '../../lib/print-utils';
+import { ResizableFigure, FigureXform, loadFigureXform, saveFigureXform, clearFigureXform } from './ResizableFigure';
 
 interface Props { report: SurveyReportRecord; lang: Language; }
 
@@ -40,6 +41,10 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
   const updateOwner=(i:number,patch:any)=> setOwners(v=> v.map((r,idx)=> idx===i? {...r,...patch}:r));
   const [purchase, setPurchase] = useState('');
   const [compromise, setCompromise] = useState('');
+  // অংকিত চিত্রের দেখার আকার/অবস্থান (মাপ বদলায় না)
+  const [figXf, setFigXf] = useState<FigureXform>(()=> loadFigureXform(report.id, report.surveyId));
+  useEffect(()=>{ setFigXf(loadFigureXform(report.id, report.surveyId)); },[report.id, report.surveyId]);
+  const changeFig=(v:FigureXform)=>{ setFigXf(v); saveFigureXform(report.id, report.surveyId, v); };
 
   const [drawing, setDrawing] = useState<SurveyDrawing|null>(null);
   const [plotMetas, setPlotMetas] = useState<PlotMeta[]>([]);
@@ -54,7 +59,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
       if(eraw){ const d=JSON.parse(eraw); if(d.header) setHeader(d.header); if(d.tagline) setTagline(d.tagline); if(d.subTagline) setSubTagline(d.subTagline); if(d.mapTitle) setMapTitle(d.mapTitle); if(d.northText) setNorthText(d.northText); if(Array.isArray(d.features)&&d.features.length) setFeatures(d.features); if(d.footerLeft) setFooterLeft(d.footerLeft); if(d.footerMid) setFooterMid(d.footerMid); if(d.footerRight) setFooterRight(d.footerRight); if(d.comments!==undefined) setComments(d.comments); if(Array.isArray(d.owners)&&d.owners.length===4) setOwners(d.owners); if(d.purchase!==undefined) setPurchase(d.purchase); if(d.compromise!==undefined) setCompromise(d.compromise);} }catch{}
   },[report.id]);
   useEffect(()=>{ try{ const EDITS_KEY=getEditsKey(); localStorage.setItem(EDITS_KEY, JSON.stringify({header, tagline, subTagline, mapTitle, northText, features, footerLeft, footerMid, footerRight, comments, owners, purchase, compromise})); }catch{} },[header, tagline, subTagline, mapTitle, northText, features, footerLeft, footerMid, footerRight, comments, owners, purchase, compromise, report.id]);
-  const clearEdits=()=>{ if(confirm('এই রিপোর্টের সব এডিট মুছবেন?')){ localStorage.removeItem(getEditsKey()); location.reload(); } };
+  const clearEdits=()=>{ if(confirm('এই রিপোর্টের সব এডিট মুছবেন?')){ localStorage.removeItem(getEditsKey()); clearFigureXform(report.id, report.surveyId); location.reload(); } };
 
   const plots = useMemo(()=>{
     const segs=(drawing?.segments||[]) as any[];
@@ -214,8 +219,8 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
               <div style={{width:0, height:0, borderLeft:'6px solid transparent', borderRight:'6px solid transparent', borderBottom:'13px solid black', marginTop:-2}}></div>
               <div style={{width:2, height:22, background:'black', marginTop:-1}}></div>
             </div>
-            <svg viewBox={`${bounds.minX} ${bounds.minY} ${bounds.maxX-bounds.minX} ${bounds.maxY-bounds.minY}`} preserveAspectRatio="xMidYMid meet" style={{width:'100%', height:'100%', display:'block'}}>
-              <rect x={bounds.minX} y={bounds.minY} width={bounds.maxX-bounds.minX} height={bounds.maxY-bounds.minY} fill="white"/>
+            <ResizableFigure aspect={(bounds.maxX-bounds.minX)/Math.max(1,bounds.maxY-bounds.minY)} value={figXf} onChange={changeFig} uiScale={scale}>
+            <svg viewBox={`${bounds.minX} ${bounds.minY} ${bounds.maxX-bounds.minX} ${bounds.maxY-bounds.minY}`} preserveAspectRatio="xMidYMid meet" style={{width:'100%', height:'100%', display:'block', overflow:'visible'}}>
               {plots.length? plots.map((pl:any,idx:number)=>{
                 const ptsStr=pl.pts.map((q:any)=> `${q.x},${q.y}`).join(' ');
                 const meta=plotMetas.find(m=> m.id===pl.id);
@@ -234,6 +239,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
                 </g>;
               }) : (drawing?.segments||[]).map((sg:any)=> <line key={sg.id} x1={sg.x1} y1={sg.y1} x2={sg.x2} y2={sg.y2} stroke="black" strokeWidth={0.9}/>)}
             </svg>
+            </ResizableFigure>
             <div style={{position:'absolute', left:6, bottom:6, background:'#f0fdf4', border:'1px solid #14532d', borderRadius:8, padding:'6px 8px', fontSize:9, lineHeight:1.3, minWidth:92}}>
               <div style={{fontWeight:900, textAlign:'center', color:'#14532d'}}>লেজেন্ড</div>
               <div style={{marginTop:4, display:'flex', alignItems:'center', gap:6}}><span style={{width:28, height:2, background:'black', display:'block'}}></span><span>দাগ সীমানা</span></div>
@@ -351,7 +357,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
         }
         @media print {
           #report-printable-area { zoom: 1 !important; transform: none !important; }
-          .print-hidden { display: none !important; }
+          .print-hidden, .fa-noprint { display: none !important; }
           .a4-page { box-shadow:none !important; border: 2px solid #14532d !important; }
           input, textarea { -webkit-appearance: none; appearance: none; border: 1px solid transparent !important; background: transparent !important; box-shadow: none !important; }
           body { background: white !important; }
