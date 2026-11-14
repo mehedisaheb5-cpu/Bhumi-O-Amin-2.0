@@ -124,3 +124,7 @@
 }
 
 
+
+/* ফিল্ড আমিন: আড়াআড়ি স্ক্রল করা চিপের সারিতে স্ক্রলবার লুকানো */
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

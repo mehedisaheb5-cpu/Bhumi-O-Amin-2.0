@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Compass, MessageSquare, User, Shield, Briefcase, LogIn, LogOut, Bell } from 'lucide-react';
+import { Globe, Compass, MessageSquare, User, Shield, Briefcase, LogIn, LogOut, Bell, Menu } from 'lucide-react';
+import { useProfile } from '../lib/profileStore';
 import { Language, AppNotification } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +18,26 @@ interface HeaderProps {
   onOpenChat: () => void;
   onSelectBooking?: (bookingId: string) => void;
   onHomeClick?: () => void;
+  /** ☰ — সাইড প্যানেল খোলে (ফিল্ড আমিন) */
+  onOpenMenu?: () => void;
 }
+
+/**
+ * ফিল্ড আমিন: পুরোনো অ্যাপের লগইন / নোটিফিকেশন / ভাষা / ইনস্টল বোতাম আপাতত লুকানো
+ * (মুছে ফেলা হয়নি)। পরে একাধিক আমিনের জন্য লগইন চালু হলে true করলেই ফিরবে।
+ */
+const SHOW_LEGACY_HEADER_ACTIONS = false;
+
+/** নামের প্রথম অক্ষর (বাংলা যুক্তাক্ষর/কার ঠিক রেখে) */
+const firstLetter = (name: string) => {
+  const t = name.trim();
+  if (!t) return '';
+  const Seg = (Intl as unknown as { Segmenter?: new (l: string, o: { granularity: string }) => { segment: (s: string) => Iterable<{ segment: string }> } }).Segmenter;
+  if (Seg) {
+    for (const g of new Seg('bn', { granularity: 'grapheme' }).segment(t)) return g.segment;
+  }
+  return Array.from(t)[0];
+};
 
 export const Header: React.FC<HeaderProps> = ({
   lang,
@@ -25,8 +45,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenChat,
   onSelectBooking,
   onHomeClick,
+  onOpenMenu,
 }) => {
   const isBn = lang === 'bn';
+  const profile = useProfile();
   const { currentUser, role, loading, logout } = useAuth();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
@@ -64,36 +86,48 @@ export const Header: React.FC<HeaderProps> = ({
       id="app-header"
       className="sticky top-0 z-30 bg-white/95 backdrop-blur-md text-slate-900 shadow-2xs border-b border-emerald-100/90"
     >
-      <div className="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between gap-2">
-        {/* Brand Identity - Clickable to go to Home */}
-        <button
-          id="header-brand-btn"
-          onClick={onHomeClick}
-          className="flex items-center gap-2.5 text-left focus:outline-hidden group min-w-0"
-        >
-          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 flex items-center justify-center shadow-2xs group-hover:bg-emerald-800 group-hover:text-white transition-colors">
-            <Compass className="w-5 h-5 stroke-[2.2]" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-slate-900 group-hover:text-emerald-900 transition-colors whitespace-nowrap truncate">
-                {isBn ? 'ভূমি ও আমিন' : 'Bhumi O Amin'}
-              </h1>
-              <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded-md bg-emerald-100/80 text-emerald-950 border border-emerald-200 hidden sm:inline-block">
-                {role === 'admin'
-                  ? (isBn ? 'অ্যাডমিন' : 'Admin')
-                  : role === 'amin'
-                  ? (isBn ? 'আমিন' : 'Amin')
-                  : (isBn ? 'ডিজিটাল' : 'Pro')}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
-              {isBn ? 'জমি বুঝুন, ঝুঁকি কমান' : 'Understand Land, Minimize Risk'}
+      <div className="max-w-4xl mx-auto px-3.5 py-2 flex items-center justify-between gap-2.5">
+        {/* ☰ সাইড প্যানেল + নাম (ডিজাইন C) */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <button
+            id="header-menu-btn"
+            onClick={onOpenMenu}
+            aria-label={isBn ? 'মেনু খুলুন' : 'Open menu'}
+            aria-controls="side-panel"
+            className="w-12 h-12 shrink-0 rounded-[18px] bg-white border border-slate-200/80 shadow-[0_2px_8px_rgba(15,23,42,.08)] flex items-center justify-center text-slate-900 active:scale-95 transition"
+          >
+            <Menu className="w-[26px] h-[26px]" />
+          </button>
+          <button
+            id="header-brand-btn"
+            onClick={onHomeClick}
+            className="text-left focus:outline-hidden min-w-0"
+          >
+            <h1 className="text-[18px] font-extrabold leading-tight text-slate-900 truncate">
+              {isBn ? 'ফিল্ড আমিন' : 'Field Amin'}
+            </h1>
+            <p className="text-[13px] font-semibold text-slate-600 leading-tight truncate">
+              {isBn ? 'ভূমি ও আমিন' : 'Bhumi O Amin'}
             </p>
-          </div>
+          </button>
+        </div>
+
+        {/* প্রোফাইল বৃত্ত — চাপলে সাইড প্যানেল */}
+        <button
+          id="header-avatar-btn"
+          onClick={onOpenMenu}
+          aria-label={profile.name}
+          className="w-12 h-12 shrink-0 rounded-full bg-[#065f46] text-white text-lg font-extrabold flex items-center justify-center overflow-hidden active:scale-95 transition"
+        >
+          {profile.photo ? (
+            <img src={profile.photo} alt="" className="w-full h-full object-cover" />
+          ) : (
+            firstLetter(profile.name)
+          )}
         </button>
 
-        {/* Action Controls */}
+        {/* Action Controls (পুরোনো — লুকানো) */}
+        {SHOW_LEGACY_HEADER_ACTIONS && (
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Notifications Bell */}
           <button
@@ -174,6 +208,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-[11px]">{isBn ? 'EN' : 'বাং'}</span>
           </button>
         </div>
+        )}
       </div>
 
       <AuthModal
