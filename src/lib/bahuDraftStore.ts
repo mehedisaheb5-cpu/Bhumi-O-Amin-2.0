@@ -417,7 +417,7 @@ const writeHandoff = (h: Handoff) => {
     /* ignore */
   }
 };
-const readCanvas = (): { segments: CanvasSeg[]; plots: PlotMeta[] } => {
+export const readCanvas = (): { segments: CanvasSeg[]; plots: PlotMeta[] } => {
   try {
     const raw = localStorage.getItem(CANVAS_KEY);
     if (!raw) return { segments: [], plots: [] };
@@ -475,10 +475,10 @@ export function handoffToCanvas(d: BahuDraft | null, confirmFn: (msg: string) =>
    ক্যানভাস → খসড়া (রিপোর্ট): চিত্র ভিত্তিকে করা পরিবর্তন বাহুর মাপে নেওয়া
    ============================================================ */
 
-type Ring = { id: string; segs: CanvasSeg[]; pts: { x: number; y: number }[] };
+export type Ring = { id: string; segs: CanvasSeg[]; pts: { x: number; y: number }[] };
 
 /** ক্যানভাসের মতোই ৪-বাহুর বন্ধ রিং খুঁজি (একই key/DFS নিয়ম) */
-function findRings(segments: CanvasSeg[]): Ring[] {
+export function findRings(segments: CanvasSeg[]): Ring[] {
   const key = (p: { x: number; y: number }) => `${Math.round(p.x)},${Math.round(p.y)}`;
   const adj = new Map<string, CanvasSeg[]>();
   for (const sg of segments)
