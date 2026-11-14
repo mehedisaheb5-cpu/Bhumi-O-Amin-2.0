@@ -819,7 +819,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
         viewBox={`0 0 ${W} ${viewH}`}
         preserveAspectRatio="none"
         className="w-full bg-white touch-none border border-slate-300 rounded-xl block"
-        style={{ height: 'calc(100dvh - 13.5rem)', minHeight: '15rem' }}
+        style={{ height: 'calc(100dvh - 13.5rem - var(--fa-canvas-offset, 0px))', minHeight: '15rem' }}
         onPointerDown={handleDown}
         onPointerMove={handleMove}
         onPointerUp={(e) => handleUp(e)}

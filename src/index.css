@@ -4,6 +4,8 @@
    ফোনের সিস্টেম ফন্টের ওপর নির্ভর না করে। */
 @theme {
   --font-sans: 'Noto Sans Bengali', ui-sans-serif, system-ui, sans-serif;
+  /* মনো ফন্টে বাংলা অঙ্ক না থাকলে □□ দেখায় — Noto ফলব্যাক */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Noto Sans Bengali', monospace;
 }
 
 /* Noto Sans Bengali — OFL, self-hosted so reports print correctly online and offline. */
