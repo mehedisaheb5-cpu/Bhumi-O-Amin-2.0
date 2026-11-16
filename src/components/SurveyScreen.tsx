@@ -33,6 +33,10 @@ import {
   loadDraft,
   saveDraft,
   syncCanvasIntoDraft,
+  calcDraft,
+  isCanvasLinked,
+  newDraftFromCanvas,
+  setBahuMsg,
 } from '../lib/bahuDraftStore';
 import { toBnDigits } from '../lib/banglaDate';
 
@@ -172,6 +176,54 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
+
+  /** চিত্র ভিত্তিক → "✓ সম্পন্ন": খসড়া হালনাগাদ, সংরক্ষিত তালিকায় জমা, তারপর রিপোর্ট পেজ */
+  const [stripMsg, setStripMsg] = useState<string | null>(null);
+  const showStripMsg = (m: string) => {
+    setStripMsg(m);
+    window.setTimeout(() => setStripMsg(null), 3500);
+  };
+  const goBahuPage = () => {
+    setWizardKey((k) => k + 1);
+    setActiveTab('plots_survey');
+  };
+  const completeFromCanvas = () => {
+    let d = loadDraft();
+    if (d && isCanvasLinked(d)) {
+      d = syncCanvasIntoDraft(d).draft;
+      if (!d.infoDone) {
+        saveDraft(d);
+        setBahuMsg('আগে গ্রাহকের তথ্য দিন, তারপর ✓ সম্পন্ন চাপুন');
+        goBahuPage();
+        return;
+      }
+      const t = calcDraft(d);
+      const bad = t.calcs.findIndex((c) => !c.complete || !c.record.areaSqFt);
+      if (bad >= 0) {
+        saveDraft({ ...d, activePlotId: d.plots[bad].id });
+        setBahuMsg(`প্লট ${toBnDigits(bad + 1)}-এর ৪ বাহুর মাপ দিন, তারপর ✓ সম্পন্ন চাপুন`);
+        goBahuPage();
+        return;
+      }
+      const survey = commitCompleted(d, onSaveSurvey, bookingId);
+      saveDraft({ ...d, status: 'completed', updatedAt: Date.now() });
+      if (onOpenReport) onOpenReport(survey.id);
+      else setActiveTab('saved_records');
+      return;
+    }
+    // শুধু ক্যানভাসে আঁকা নকশা → আগে গ্রাহকের তথ্য
+    if (d && d.status !== 'completed' && (d.info.clientName || d.infoDone)) {
+      if (!window.confirm('বাহুভিত্তিকে একটি অসম্পূর্ণ জরিপ আছে। সেটা বাদ দিয়ে এই নকশার জন্য নতুন জরিপ শুরু করবেন?')) return;
+    }
+    const nd = newDraftFromCanvas();
+    if (!nd) {
+      showStripMsg('আগে নকশা আঁকুন এবং বাহুর মাপ (ফুট-ইঞ্চি) দিন');
+      return;
+    }
+    saveDraft(nd);
+    setBahuMsg('নকশার মাপ নেওয়া হয়েছে ✓ এখন গ্রাহকের তথ্য দিন, তারপর ✓ সম্পন্ন চাপুন');
+    goBahuPage();
+  };
 
   /** সংরক্ষিত বাহুভিত্তিক জরিপ আবার খুলে এডিট */
   const editBahuSurvey = (survey: SurveyRecord) => {
@@ -622,9 +674,9 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
           <div id="drawing-info-strip" className="flex items-center gap-2 h-[2.9rem] mb-1">
             <button
               onClick={() => setActiveTab('plots_survey')}
-              className="shrink-0 h-full px-3 rounded-xl bg-emerald-800 text-white text-[15px] font-extrabold"
+              className="shrink-0 h-full px-3 rounded-xl bg-white border-2 border-emerald-800 text-emerald-900 text-[15px] font-extrabold"
             >
-              ← বাহুভিত্তিক
+              ← বাহু
             </button>
             <div className="flex-1 min-w-0 h-full px-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center">
               <span className="truncate text-[15px] font-bold text-emerald-950">
@@ -632,12 +684,20 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
               </span>
             </div>
             <button
-              onClick={() => setActiveTab('saved_records')}
-              className="shrink-0 h-full px-3 rounded-xl bg-white border-2 border-slate-300 text-slate-800 text-[15px] font-bold"
+              id="drawing-complete"
+              onClick={completeFromCanvas}
+              className="shrink-0 h-full px-3.5 rounded-xl bg-emerald-800 active:bg-emerald-900 text-white text-[16px] font-extrabold shadow-md"
             >
-              {isBn ? 'তালিকা' : 'List'}
+              ✓ সম্পন্ন
             </button>
           </div>
+          {stripMsg && (
+            <div className="relative z-30">
+              <div className="absolute left-0 right-0 top-0 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 px-3 py-2.5 text-[15px] font-bold shadow-md">
+                {stripMsg}
+              </div>
+            </div>
+          )}
           <DrawingCanvas lang={lang} />
         </div>
       ) : activeTab === 'gps_survey' ? (
