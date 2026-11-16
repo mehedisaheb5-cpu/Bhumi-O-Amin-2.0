@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { Language, NavTab, SurveyRecord } from './types';
 import { initialSurveys } from './data/mockData';
 import { Header } from './components/Header';
@@ -22,9 +22,15 @@ import { ProfileScreen } from './components/ProfileScreen';
 import { ChatModal } from './components/ChatModal';
 import { SidePanel, SideMenuId } from './components/fieldamin/SidePanel';
 import { ConverterScreen } from './components/fieldamin/ConverterScreen';
-import { ComingSoonScreen } from './components/fieldamin/ComingSoonScreen';
 import { HandMapScreen } from './components/fieldamin/HandMapScreen';
 import { FieldHomeScreen } from './components/fieldamin/FieldHomeScreen';
+
+/**
+ * ধাপ ৮ — এডমিন আলাদা chunk-এ lazy-load হয়, স্টার্টআপের module গ্রাফে থাকে না।
+ * (ধাপ ৭-এর শিক্ষা: রিপোর্ট/এডমিন কোড স্টার্টআপ গ্রাফে ঢুকলে circular chunk হয়ে
+ * অ্যাপ সাদা হয়ে গিয়েছিল। এই import() শুধু এডমিন খুললেই লোড হয়।)
+ */
+const AdminScreen = lazy(() => import('./components/admin/AdminScreen'));
 
 /**
  * ফিল্ড আমিন: পুরোনো অ্যাপের হোম (খতিয়ান, উত্তরাধিকার, দলিল, মৌজা ম্যাপ, AI চ্যাট কার্ড) লুকানো।
@@ -818,12 +824,20 @@ export default function App() {
           />
         )}
 
-        {/* ফিল্ড আমিন: এডমিন (ধাপ ৮) — আপাতত তথ্য পাতা */}
+        {/* ফিল্ড আমিন: এডমিন (ধাপ ৮) — PIN + রিপোর্ট + সেটিংস + ব্যাকআপ (lazy chunk) */}
         {currentScreen.screenId === 'admin' && (
-          <ComingSoonScreen
-            kind={currentScreen.screenId}
-            onGoMeasure={() => navigateTo({ screenId: 'possession' })}
-          />
+          <Suspense
+            fallback={
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-[15px] font-bold text-slate-500">
+                এডমিন লোড হচ্ছে…
+              </div>
+            }
+          >
+            <AdminScreen
+              onBack={goBack}
+              onOpenReport={(reportId) => navigateTo({ screenId: 'reports', reportId })}
+            />
+          </Suspense>
         )}
       </main>
       </ErrorBoundary>
