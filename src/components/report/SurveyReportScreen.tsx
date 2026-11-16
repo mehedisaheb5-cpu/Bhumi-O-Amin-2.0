@@ -535,7 +535,7 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
       {/* ================================================================== */}
       {/* 2. MAIN BODY CONTENT                                               */}
       {/* ================================================================== */}
-      <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4">
+      <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4 print:max-w-none print:mx-0 print:px-0 print:pt-0">
         {/* TAB 1: SAVED REPORTS LIST */}
         {activeTab === 'list' && (
           <ReportListView

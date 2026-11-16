@@ -187,7 +187,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
   },[]);
 
   return (
-    <div style={{width:'100%', maxWidth:'100vw', overflowX:'hidden', display:'flex', justifyContent:'center'}}>
+    <div className="report-a4-wrap" style={{width:'100%', maxWidth:'100vw', overflowX:'hidden', display:'flex', justifyContent:'center'}}>
     <div id="report-printable-area" style={{width:'210mm', maxWidth:'210mm', margin:'0 auto', background:'white', fontFamily:'Noto Sans Bengali, sans-serif', fontSynthesis:'none', zoom: scale as any}}>
       <div className="print-hidden" style={{marginBottom:8, background:'#fffbeb', border:'1px solid #fcd34d', color:'#78350f', fontSize:12, borderRadius:8, padding:8, display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
         <span>✏️ সব ঘর এডিট করুন — অটো-সেভ <span style={{background:'#16a34a', color:'white', padding:'1px 6px', borderRadius:4, fontSize:10}}>✓ চালু</span> রিলোডেও থাকবে</span>
@@ -402,9 +402,10 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
           #report-printable-area { max-width: 100vw; }
         }
         @media print {
-          #report-printable-area { zoom: 1 !important; transform: none !important; }
+          .report-a4-wrap { width: 210mm !important; max-width: 210mm !important; margin: 0 auto !important; overflow: visible !important; display: block !important; }
+          #report-printable-area { width: 210mm !important; max-width: 210mm !important; margin: 0 auto !important; zoom: 1 !important; transform: none !important; }
           .print-hidden, .fa-noprint { display: none !important; }
-          .a4-page { box-shadow:none !important; border: 2px solid #14532d !important; }
+          .a4-page { width: 210mm !important; max-width: 210mm !important; box-shadow:none !important; border: 2px solid #14532d !important; }
           input, textarea { -webkit-appearance: none; appearance: none; border: 1px solid transparent !important; background: transparent !important; box-shadow: none !important; }
           body { background: white !important; }
         }

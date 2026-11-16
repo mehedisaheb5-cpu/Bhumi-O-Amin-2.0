@@ -505,7 +505,7 @@ export default function App() {
       {/* Main Content View Area */}
       <ErrorBoundary>
       <main
-        className={`flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-6 ${
+        className={`flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-6 print:max-w-none print:px-0 print:pt-0 print:pb-0 ${
           currentScreen.screenId === 'survey' ? 'pt-2 pb-2 overflow-hidden' : 'pt-3.5 pb-28'
         }`}
       >
