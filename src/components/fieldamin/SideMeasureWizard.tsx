@@ -15,6 +15,7 @@ import {
   clearDraft,
   commitCompleted,
   syncCanvasIntoDraft,
+  takeBahuMsg,
   fmtFtIn,
   loadDraft,
   newDraft,
@@ -185,21 +186,21 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
     } catch {
       /* ignore */
     }
-    return { draft: r.draft, changed: r.changed || note };
+    return { draft: r.draft, changed: r.changed || note, msg: takeBahuMsg() };
   });
   const [draft, setDraft] = useState<BahuDraft>(initSync.draft);
   const [errors, setErrors] = useState<Partial<Record<keyof BahuInfo, string>>>({});
   const [savedTick, setSavedTick] = useState(false);
   const [msg, setMsg] = useState<string | null>(
-    initSync.changed ? 'চিত্র ভিত্তিকে করা পরিবর্তন বাহুর মাপ ও রিপোর্টে নেওয়া হয়েছে ✓' : null
+    initSync.msg || (initSync.changed ? 'চিত্র ভিত্তিকে করা পরিবর্তন বাহুর মাপ ও রিপোর্টে নেওয়া হয়েছে ✓' : null)
   );
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
   // সম্পন্ন জরিপ ক্যানভাস থেকে বদলালে সংরক্ষিত জরিপ/রিপোর্টও হালনাগাদ
   useEffect(() => {
     if (initSync.changed && initSync.draft.status === 'completed') commitCompleted(initSync.draft, onSaveSurvey, bookingId);
-    if (initSync.changed) {
-      const t = window.setTimeout(() => setMsg(null), 4500);
+    if (initSync.changed || initSync.msg) {
+      const t = window.setTimeout(() => setMsg(null), initSync.msg ? 9000 : 4500);
       return () => window.clearTimeout(t);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,6 +264,7 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
     setErrors(e);
     if (Object.keys(e).length) return;
     update((d) => ({ ...d, infoDone: true }), false);
+    setMsg(null);
     window.setTimeout(() => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       inputs.current[0]?.focus();
@@ -330,6 +332,7 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
     return (
       <div id="bahu-info-page" className="space-y-3 pb-28">
         <Steps step={1} />
+        {msg && <div className="rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-900 px-3 py-2.5 text-[15px] font-bold">{msg}</div>}
         <div className="rounded-2xl bg-white border border-slate-200 shadow-xs p-4 space-y-4">
           <h3 className="text-lg font-extrabold text-emerald-900">গ্রাহকের তথ্য</h3>
           <Field id="bi-name" label="গ্রাহকের নাম" required value={i.clientName} onChange={(v) => setInfo('clientName', v)} error={errors.clientName} />

@@ -3,9 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 /**
  * রিপোর্টের অংকিত চিত্র — শুধু দেখার আকার ও অবস্থান বদলায়।
  * বাহুর মাপ, আকৃতি বা ক্ষেত্রফল কিছুই বদলায় না (পুরো চিত্র একসাথে সমান অনুপাতে ছোট-বড় হয়)।
- *  - চিত্রে ট্যাপ → নির্বাচন (চার কোনায় হ্যান্ডেল)
- *  - কোনা টানলে/ঠেললে ছোট-বড়, মাঝখান ধরে টানলে সরে, দুই আঙুলে চিমটি দিলেও ছোট-বড়
- *  - প্রিন্ট/PDF-এ হ্যান্ডেল বা দাগ দেখা যায় না
+ *  - চিত্রের যেকোনো কোনা ধরে বাইরে টানলে বড়, ভেতরে ঠেললে ছোট (কোনো আলাদা ফ্রেম নেই)
+ *  - চিত্রের ভেতরে ধরে টানলে সরে যায়; দুই আঙুলে চিমটি দিলেও ছোট-বড়
+ *  - টানার সময় শুধু CSS transform বদলায় (মসৃণ), আঙুল তুললে সেভ হয়
+ *  - প্রিন্ট/PDF-এ কোনার বিন্দু বা নির্দেশনা দেখা যায় না
  */
 export interface FigureXform { dx: number; dy: number; s: number }
 export const DEFAULT_XFORM: FigureXform = { dx: 0, dy: 0, s: 1 };
@@ -54,28 +55,34 @@ export function clearFigureXform(reportId?: string, surveyId?: string) {
 interface Props {
   /** চিত্রের প্রস্থ ÷ উচ্চতা */
   aspect: number;
+  /** চিত্রের কোনাগুলো, চিত্রের বাক্সের ভগ্নাংশে (০–১) */
+  corners: { x: number; y: number }[];
   value: FigureXform;
   onChange: (v: FigureXform) => void;
-  /** রিপোর্টে প্রয়োগ করা zoom — হ্যান্ডেল যেন ফোনে আঙুলের মাপে থাকে */
+  /** রিপোর্টে প্রয়োগ করা zoom — কোনার ছোঁয়ার জায়গা যেন ফোনে আঙুলের মাপে থাকে */
   uiScale: number;
   children: React.ReactNode;
 }
 
 type Gesture =
-  | { mode: 'move'; px: number; py: number; v: FigureXform }
-  | { mode: 'resize'; ox: number; oy: number; sx: number; sy: number }
-  | { mode: 'pinch'; dist: number; mx: number; my: number; v: FigureXform };
+  | { mode: 'move'; px: number; py: number }
+  | { mode: 'corner'; d0: number }
+  | { mode: 'pinch'; dist: number; mx: number; my: number; ox: number; oy: number; k0: number };
 
-export const ResizableFigure: React.FC<Props> = ({ aspect, value, onChange, uiScale, children }) => {
+export const ResizableFigure: React.FC<Props> = ({ aspect, corners, value, onChange, uiScale, children }) => {
   const layerRef = useRef<HTMLDivElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
-  const barRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const [selected, setSelected] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // নির্দেশনা কয়েক সেকেন্ড দেখিয়ে লুকাই — বাহুর মাপের লেখা যেন ঢাকা না পড়ে
+  const [hint, setHint] = useState(true);
+  useEffect(() => { const t = window.setTimeout(() => setHint(false), 5000); return () => window.clearTimeout(t); }, []);
+  useEffect(() => { if (busy) setHint(false); }, [busy]);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<Gesture | null>(null);
-  const valueRef = useRef(value);
-  valueRef.current = value;
+  /** চলমান অঙ্গভঙ্গির অস্থায়ী অবস্থা: সরানো (tx,ty) ও গুণ (k) — বক্সের নিজের মাপে */
+  const live = useRef({ tx: 0, ty: 0, k: 1 });
+  const raf = useRef<number | null>(null);
 
   useEffect(() => {
     const el = layerRef.current;
@@ -88,182 +95,175 @@ export const ResizableFigure: React.FC<Props> = ({ aspect, value, onChange, uiSc
     return () => ro.disconnect();
   }, []);
 
-  // বাইরে ট্যাপ করলে নির্বাচন বন্ধ
-  useEffect(() => {
-    if (!selected) return;
-    const h = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (boxRef.current?.contains(t) || barRef.current?.contains(t)) return;
-      setSelected(false);
-    };
-    document.addEventListener('pointerdown', h, true);
-    return () => document.removeEventListener('pointerdown', h, true);
-  }, [selected]);
-
   const W = size.w, H = size.h;
   const a = aspect > 0 && isFinite(aspect) ? aspect : 1;
   let bw = W, bh = H;
   if (W > 0 && H > 0) {
-    // স্বাভাবিক আকার: ফ্রেমের ৮৬% — কোনার হ্যান্ডেল ও লেজেন্ডের জন্য ফাঁকা জায়গা থাকে
     const FW = W * BASE_FIT, FH = H * BASE_FIT;
     if (a > FW / FH) { bw = FW; bh = FW / a; } else { bh = FH; bw = FH * a; }
   }
-  const geom = (v: FigureXform) => {
-    const w = bw * v.s, h = bh * v.s;
-    const cx = W / 2 + v.dx * W, cy = H / 2 + v.dy * H;
-    return { w, h, cx, cy, left: cx - w / 2, top: cy - h / 2 };
-  };
-  const g = geom(value);
+  const w = bw * value.s, h = bh * value.s;
+  const cx = W / 2 + value.dx * W, cy = H / 2 + value.dy * H;
+  const ready = W > 0 && H > 0;
 
-  const toLocal = (e: React.PointerEvent) => {
+  /** পয়েন্টার → লেয়ারের নিজস্ব px (রিপোর্টের zoom বাদ দিয়ে) */
+  const toLocal = (e: { clientX: number; clientY: number }) => {
     const el = layerRef.current!;
     const r = el.getBoundingClientRect();
     const ratio = el.offsetWidth ? r.width / el.offsetWidth : 1;
     return { x: (e.clientX - r.left) / ratio, y: (e.clientY - r.top) / ratio };
   };
 
-  const emit = (cx: number, cy: number, s: number) => {
-    if (!W || !H) return;
-    onChange({ dx: clamp((cx - W / 2) / W, -0.5, 0.5), dy: clamp((cy - H / 2) / H, -0.5, 0.5), s: clamp(s, MIN_S, MAX_S) });
+  const paint = () => {
+    raf.current = null;
+    const b = boxRef.current;
+    if (!b) return;
+    const { tx, ty, k } = live.current;
+    b.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`;
+  };
+  const schedule = () => { if (raf.current == null) raf.current = requestAnimationFrame(paint); };
+
+  /** চলমান অবস্থা মান হিসেবে সেভ করে transform মুছি */
+  const commit = () => {
+    const { tx, ty, k } = live.current;
+    live.current = { tx: 0, ty: 0, k: 1 };
+    if (raf.current != null) { cancelAnimationFrame(raf.current); raf.current = null; }
+    if (boxRef.current) boxRef.current.style.transform = '';
+    if (!W || !H || (tx === 0 && ty === 0 && k === 1)) return;
+    const s = clamp(value.s * k, MIN_S, MAX_S);
+    onChange({ dx: clamp((cx + tx - W / 2) / W, -0.5, 0.5), dy: clamp((cy + ty - H / 2) / H, -0.5, 0.5), s });
   };
 
-  const startMoveOrPinch = () => {
+  const kLimit = (k: number) => clamp(value.s * k, MIN_S, MAX_S) / value.s;
+
+  const begin = () => {
     const pts = [...pointers.current.values()];
-    const v = valueRef.current;
     if (pts.length >= 2) {
       const [p, q] = pts;
-      gesture.current = { mode: 'pinch', dist: Math.hypot(p.x - q.x, p.y - q.y) || 1, mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2, v };
-    } else if (pts.length === 1) {
-      gesture.current = { mode: 'move', px: pts[0].x, py: pts[0].y, v };
-    } else gesture.current = null;
+      const { tx, ty, k } = live.current;
+      gesture.current = { mode: 'pinch', dist: Math.hypot(p.x - q.x, p.y - q.y) || 1, mx: (p.x + q.x) / 2, my: (p.y + q.y) / 2, ox: tx, oy: ty, k0: k };
+    } else if (pts.length === 1 && gesture.current?.mode !== 'corner') {
+      const { tx, ty } = live.current;
+      gesture.current = { mode: 'move', px: pts[0].x - tx, py: pts[0].y - ty };
+    }
   };
 
   const onBoxDown = (e: React.PointerEvent) => {
-    if (!selected) return; // প্রথম ট্যাপ শুধু নির্বাচন করে (onClick), পেজ স্ক্রল স্বাভাবিক থাকে
     e.preventDefault();
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    try { boxRef.current?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     pointers.current.set(e.pointerId, toLocal(e));
-    startMoveOrPinch();
+    setBusy(true);
+    begin();
   };
 
-  const onHandleDown = (corner: number) => (e: React.PointerEvent) => {
+  const onCornerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    const cur = geom(valueRef.current);
-    const sx = corner === 1 || corner === 2 ? 1 : -1; // ডান কোনা
-    const sy = corner === 2 || corner === 3 ? 1 : -1; // নিচের কোনা
-    pointers.current.clear();
-    gesture.current = { mode: 'resize', ox: cur.cx - (sx * cur.w) / 2, oy: cur.cy - (sy * cur.h) / 2, sx, sy };
+    try { boxRef.current?.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    const p = toLocal(e);
+    pointers.current.set(e.pointerId, p);
+    setBusy(true);
+    if (pointers.current.size >= 2) { begin(); return; }
+    gesture.current = { mode: 'corner', d0: Math.max(8, Math.hypot(p.x - cx, p.y - cy)) };
   };
 
   const onMove = (e: React.PointerEvent) => {
-    const gs = gesture.current;
-    if (!gs) return;
-    const p = toLocal(e);
-    if (gs.mode === 'resize') {
-      const vx = Math.max(0, (p.x - gs.ox) * gs.sx);
-      const vy = Math.max(0, (p.y - gs.oy) * gs.sy);
-      const s = clamp((vx * bw + vy * bh) / (bw * bw + bh * bh || 1), MIN_S, MAX_S);
-      emit(gs.ox + (gs.sx * bw * s) / 2, gs.oy + (gs.sy * bh * s) / 2, s);
-      return;
-    }
     if (!pointers.current.has(e.pointerId)) return;
+    const p = toLocal(e);
     pointers.current.set(e.pointerId, p);
-    const s0 = geom(gs.v);
-    if (gs.mode === 'move') {
-      emit(s0.cx + (p.x - gs.px), s0.cy + (p.y - gs.py), gs.v.s);
+    const g = gesture.current;
+    if (!g) return;
+    if (g.mode === 'corner') {
+      // কেন্দ্র থেকে আঙুলের দূরত্বের অনুপাতে পুরো চিত্র ছোট-বড়
+      live.current.k = kLimit(Math.hypot(p.x - cx, p.y - cy) / g.d0);
+    } else if (g.mode === 'move') {
+      live.current.tx = p.x - g.px;
+      live.current.ty = p.y - g.py;
     } else {
       const [q1, q2] = [...pointers.current.values()];
       if (!q2) return;
       const dist = Math.hypot(q1.x - q2.x, q1.y - q2.y);
-      const mx = (q1.x + q2.x) / 2, my = (q1.y + q2.y) / 2;
-      emit(s0.cx + (mx - gs.mx), s0.cy + (my - gs.my), gs.v.s * (dist / gs.dist));
+      live.current.k = kLimit(g.k0 * (dist / g.dist));
+      live.current.tx = g.ox + ((q1.x + q2.x) / 2 - g.mx);
+      live.current.ty = g.oy + ((q1.y + q2.y) / 2 - g.my);
     }
+    schedule();
   };
 
   const onUp = (e: React.PointerEvent) => {
-    if (gesture.current?.mode === 'resize') { gesture.current = null; return; }
     pointers.current.delete(e.pointerId);
-    startMoveOrPinch();
-  };
-
-  const nudgeScale = (f: number) => {
-    const v = valueRef.current;
-    const cur = geom(v);
-    emit(cur.cx, cur.cy, v.s * f);
+    if (pointers.current.size === 0) {
+      gesture.current = null;
+      setBusy(false);
+      commit();
+    } else {
+      gesture.current = null;
+      begin();
+    }
   };
 
   const k = 1 / (uiScale > 0 ? uiScale : 1); // স্ক্রিনের px → রিপোর্টের px
-  const hs = 34 * k; // হ্যান্ডেলের ছোঁয়ার জায়গা (~৩৪px স্ক্রিনে)
-  const dot = 16 * k;
-  const ready = W > 0 && H > 0;
-  const btn: React.CSSProperties = {
-    minWidth: 38 * k, height: 38 * k, padding: `0 ${9 * k}px`, whiteSpace: 'nowrap', borderRadius: 10 * k, border: `${1.5 * k}px solid #065f46`,
-    background: 'white', color: '#065f46', fontWeight: 800, fontSize: 15 * k, cursor: 'pointer', lineHeight: 1,
-    fontFamily: 'Noto Sans Bengali, sans-serif',
-  };
+  const hit = 44 * k; // কোনার ছোঁয়ার জায়গা (~৪৪px স্ক্রিনে)
+  const dot = 12 * k;
+  const moved = value.s !== 1 || value.dx !== 0 || value.dy !== 0;
 
   return (
     <div ref={layerRef} style={{ position: 'absolute', inset: 0 }}>
       <div
         ref={boxRef}
         id="report-figure"
-        data-selected={selected ? '1' : '0'}
-        onClick={() => { if (!selected) setSelected(true); }}
         onPointerDown={onBoxDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
         style={{
           position: 'absolute',
-          left: ready ? g.left : 0, top: ready ? g.top : 0,
-          width: ready ? g.w : '100%', height: ready ? g.h : '100%',
-          touchAction: selected ? 'none' : 'auto',
+          left: ready ? cx - w / 2 : 0, top: ready ? cy - h / 2 : 0,
+          width: ready ? w : '100%', height: ready ? h : '100%',
+          transformOrigin: 'center center',
+          willChange: busy ? 'transform' : undefined,
+          touchAction: 'none',
           userSelect: 'none', WebkitUserSelect: 'none',
-          cursor: selected ? 'move' : 'pointer',
+          cursor: busy ? 'grabbing' : 'grab',
         }}
       >
         {children}
-        {selected && (
-          <>
-            <div className="fa-noprint" style={{ position: 'absolute', inset: 0, border: `${2 * k}px dashed #065f46`, background: 'rgba(6,95,70,0.04)', pointerEvents: 'none' }} />
-            {[0, 1, 2, 3].map((c) => (
-              <div
-                key={c}
-                className="fa-noprint"
-                data-corner={c}
-                onPointerDown={onHandleDown(c)}
-                onPointerMove={onMove}
-                onPointerUp={onUp}
-                onPointerCancel={onUp}
-                style={{
-                  position: 'absolute', width: hs, height: hs,
-                  left: (c === 1 || c === 2 ? '100%' : 0) as any, top: (c === 2 || c === 3 ? '100%' : 0) as any,
-                  transform: 'translate(-50%,-50%)', touchAction: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: c === 0 || c === 2 ? 'nwse-resize' : 'nesw-resize', zIndex: 3,
-                }}
-              >
-                <span style={{ width: dot, height: dot, borderRadius: '50%', background: '#065f46', border: `${2.5 * k}px solid white`, boxShadow: `0 0 0 ${1 * k}px #065f46`, display: 'block' }} />
-              </div>
-            ))}
-          </>
-        )}
+        {ready && corners.map((c, i) => (
+          <div
+            key={i}
+            className="fa-noprint"
+            data-corner={i}
+            onPointerDown={onCornerDown}
+            style={{
+              position: 'absolute', width: hit, height: hit,
+              left: `${c.x * 100}%`, top: `${c.y * 100}%`,
+              transform: "translate(-50%,-50%)",
+              touchAction: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'nwse-resize', zIndex: 3, borderRadius: '50%',
+            }}
+          >
+            <span style={{ width: dot, height: dot, borderRadius: '50%', background: 'rgba(6,95,70,0.55)', border: `${2 * k}px solid white`, display: 'block' }} />
+          </div>
+        ))}
       </div>
 
-      {selected ? (
-        <div ref={barRef} className="fa-noprint" id="report-figure-bar"
-          style={{ position: 'absolute', top: 6 * k, left: 6 * k, zIndex: 5, display: 'flex', gap: 6 * k, alignItems: 'center', background: '#ecfdf5', border: `${1.5 * k}px solid #065f46`, borderRadius: 12 * k, padding: 5 * k, boxShadow: `0 ${2 * k}px ${8 * k}px rgba(0,0,0,0.15)` }}>
-          <button type="button" style={btn} onClick={() => nudgeScale(1 / 1.1)} aria-label="ছোট">−</button>
-          <button type="button" style={btn} onClick={() => nudgeScale(1.1)} aria-label="বড়">+</button>
-          <button type="button" style={btn} onClick={() => onChange(DEFAULT_XFORM)}>শুরুর মাপে</button>
-          <button type="button" style={{ ...btn, background: '#065f46', color: 'white' }} onClick={() => setSelected(false)}>✓ ঠিক আছে</button>
-        </div>
-      ) : (
-        <div className="fa-noprint" style={{ position: 'absolute', top: 6 * k, left: 6 * k, zIndex: 5, pointerEvents: 'none', background: 'rgba(236,253,245,0.95)', color: '#065f46', border: `${1 * k}px solid #065f46`, borderRadius: 10 * k, padding: `${4 * k}px ${8 * k}px`, fontSize: 13 * k, fontWeight: 700 }}>
-          চিত্রে ট্যাপ করুন: ছোট-বড় / সরান
-        </div>
-      )}
+      <div className="fa-noprint" style={{ position: 'absolute', top: 6 * k, left: 6 * k, zIndex: 5, display: 'flex', gap: 6 * k, alignItems: 'center', pointerEvents: 'none' }}>
+        {!moved && hint && (
+          <span style={{ background: 'rgba(236,253,245,0.95)', color: '#065f46', border: `${1 * k}px solid #065f46`, borderRadius: 10 * k, padding: `${3 * k}px ${7 * k}px`, fontSize: 11 * k, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            কোনা টেনে ছোট-বড় · ভেতরে ধরে সরান
+          </span>
+        )}
+        {moved && (
+          <button
+            type="button"
+            id="report-figure-reset"
+            onClick={() => onChange(DEFAULT_XFORM)}
+            style={{ pointerEvents: 'auto', minHeight: 34 * k, padding: `0 ${10 * k}px`, borderRadius: 10 * k, border: `${1.5 * k}px solid #065f46`, background: 'white', color: '#065f46', fontWeight: 800, fontSize: 13 * k, whiteSpace: 'nowrap', fontFamily: 'Noto Sans Bengali, sans-serif', cursor: 'pointer' }}
+          >
+            শুরুর মাপে
+          </button>
+        )}
+      </div>
     </div>
   );
 };

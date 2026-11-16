@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { SurveyReportRecord, Language, SurveyDrawing, PlotMeta } from '../../types';
 import { formatNumberByLang, roundClean } from '../../lib/land-units';
 import { printWithNoto } from '../../lib/print-utils';
+import { reportDrawingFor } from '../../lib/bahuDraftStore';
 import { ResizableFigure, FigureXform, loadFigureXform, saveFigureXform, clearFigureXform } from './ResizableFigure';
 
 interface Props { report: SurveyReportRecord; lang: Language; }
@@ -50,7 +51,8 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
   const [plotMetas, setPlotMetas] = useState<PlotMeta[]>([]);
   const getEditsKey = () => `bhumi_report_edits_${report.id || 'global'}`;
   useEffect(()=>{
-    try{ const raw=localStorage.getItem('bhumi_possession_drawing_v1'); if(raw){ const d=JSON.parse(raw); if(d.segments) { setDrawing(d); if(Array.isArray(d.plots)) setPlotMetas(d.plots);} } }catch{}
+    // এই জরিপের সঠিক নকশা (বাহু/চিত্র ভিত্তিক); না পেলে পুরনো নিয়মে ক্যানভাস
+    try{ const own=reportDrawingFor(report.surveyId); if(own){ setDrawing({segments:own.segments, plots:own.plots, updatedAt:Date.now()} as SurveyDrawing); setPlotMetas(own.plots||[]); } else { const raw=localStorage.getItem('bhumi_possession_drawing_v1'); if(raw){ const d=JSON.parse(raw); if(d.segments) { setDrawing(d); if(Array.isArray(d.plots)) setPlotMetas(d.plots);} } } }catch{}
     try{
       const EDITS_KEY = getEditsKey();
       let eraw = localStorage.getItem(EDITS_KEY);
@@ -83,13 +85,62 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
     return out;
   },[drawing]);
 
-  const bounds = useMemo(()=>{
+  // লেখার মাপ নকশার আকারের অনুপাতে — বড়/ছোট নকশায় একই রকম পড়া যায়
+  const rawBox = useMemo(()=>{
     const segs=drawing?.segments||[];
     if(!segs.length) return {minX:0,maxX:400,minY:0,maxY:400};
     let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
     for(const sg of segs as any[]){ minX=Math.min(minX,sg.x1,sg.x2); maxX=Math.max(maxX,sg.x1,sg.x2); minY=Math.min(minY,sg.y1,sg.y2); maxY=Math.max(maxY,sg.y1,sg.y2); }
-    const pad=14; return {minX:minX-pad,maxX:maxX+pad,minY:minY-pad,maxY:maxY+pad};
+    return {minX,maxX,minY,maxY};
   },[drawing]);
+  const fs = useMemo(()=>{
+    const span=Math.max(40, rawBox.maxX-rawBox.minX, rawBox.maxY-rawBox.minY);
+    return { side: span*0.042, dag: span*0.06, dec: span*0.05, gap: span*0.03, stroke: span*0.006 };
+  },[rawBox]);
+  const bounds = useMemo(()=>{
+    // বাহুর মাপের লেখা দাগের বাইরে বসে — তার জায়গা রাখি
+    const pad=fs.gap+fs.side*1.6;
+    return {minX:rawBox.minX-pad,maxX:rawBox.maxX+pad,minY:rawBox.minY-pad,maxY:rawBox.maxY+pad};
+  },[rawBox, fs]);
+  /** বাহুর মাপের লেখা: দাগের মাঝ থেকে প্লটের বাইরের দিকে সরিয়ে, একই দাগ একবার */
+  const sideLabels = useMemo(()=>{
+    const out:{key:string,x:number,y:number,ang:number,txt:string,onLine:boolean}[]=[];
+    const seen=new Set<string>();
+    const midKey=(a:any,b:any)=> [Math.round((a.x+b.x)/2),Math.round((a.y+b.y)/2)].join(',');
+    // দুই প্লটের মাঝের (যৌথ) দাগ — লেখা দাগের ঠিক উপরে বসে (সাদা আভায়), কোনো প্লটের ভেতরে ঢোকে না
+    const useCount=new Map<string,number>();
+    for(const pl of plots as any[]) pl.pts.forEach((pt:any,i:number)=>{ const k=midKey(pt,pl.pts[(i+1)%pl.pts.length]); useCount.set(k,(useCount.get(k)||0)+1); });
+    const ftInTxt=(ft:number)=>{ const t=Math.round(ft*12); const f=Math.floor(t/12), i=t%12; return i? `${f}′ ${i}″` : `${f}′`; };
+    const put=(a:any,b:any,len:number,cx:number,cy:number)=>{
+      if(!(len>0)) return;
+      const k=midKey(a,b);
+      if(seen.has(k)) return; seen.add(k);
+      const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1;
+      let nx=-dy/L, ny=dx/L;
+      if((mx-cx)*nx+(my-cy)*ny<0){ nx=-nx; ny=-ny; } // বাইরের দিকে
+      const off=(useCount.get(k)||0)>1 ? 0 : fs.gap+fs.side*0.55;
+      let ang=Math.atan2(dy,dx)*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180; // উল্টো না হয়
+      out.push({key:k, x:mx+nx*off, y:my+ny*off, ang, txt:ftInTxt(len), onLine: off===0});
+    };
+    if(plots.length){
+      for(const pl of plots as any[]) pl.pts.forEach((pt:any,i:number)=>{ const nxt=pl.pts[(i+1)%pl.pts.length]; put(pt,nxt,pl.sides[i],pl.cx,pl.cy); });
+    } else {
+      const cx=(rawBox.minX+rawBox.maxX)/2, cy=(rawBox.minY+rawBox.maxY)/2;
+      for(const sg of (drawing?.segments||[]) as any[]) put({x:sg.x1,y:sg.y1},{x:sg.x2,y:sg.y2},sg.lengthFt,cx,cy);
+    }
+    return out;
+  },[plots, drawing, rawBox, fs]);
+  /** কোনাগুলো (চিত্রের বাক্সের ভগ্নাংশে) — এগুলো ধরে ছোট-বড় করা যায় */
+  const figCorners = useMemo(()=>{
+    const W=bounds.maxX-bounds.minX||1, H=bounds.maxY-bounds.minY||1;
+    const seen=new Set<string>(); const out:{x:number,y:number}[]=[];
+    for(const sg of (drawing?.segments||[]) as any[]) for(const p of [{x:sg.x1,y:sg.y1},{x:sg.x2,y:sg.y2}]){
+      const k=`${Math.round(p.x)},${Math.round(p.y)}`; if(seen.has(k)) continue; seen.add(k);
+      out.push({x:(p.x-bounds.minX)/W, y:(p.y-bounds.minY)/H});
+    }
+    return out;
+  },[drawing, bounds]);
 
   const tafsils = useMemo(()=>{
     if(plots.length){
@@ -219,32 +270,27 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
               <div style={{width:0, height:0, borderLeft:'6px solid transparent', borderRight:'6px solid transparent', borderBottom:'13px solid black', marginTop:-2}}></div>
               <div style={{width:2, height:22, background:'black', marginTop:-1}}></div>
             </div>
-            <ResizableFigure aspect={(bounds.maxX-bounds.minX)/Math.max(1,bounds.maxY-bounds.minY)} value={figXf} onChange={changeFig} uiScale={scale}>
+            <ResizableFigure aspect={(bounds.maxX-bounds.minX)/Math.max(1,bounds.maxY-bounds.minY)} corners={figCorners} value={figXf} onChange={changeFig} uiScale={scale}>
             <svg viewBox={`${bounds.minX} ${bounds.minY} ${bounds.maxX-bounds.minX} ${bounds.maxY-bounds.minY}`} preserveAspectRatio="xMidYMid meet" style={{width:'100%', height:'100%', display:'block', overflow:'visible'}}>
               {plots.length? plots.map((pl:any,idx:number)=>{
                 const ptsStr=pl.pts.map((q:any)=> `${q.x},${q.y}`).join(' ');
                 const meta=plotMetas.find(m=> m.id===pl.id);
                 return <g key={pl.id}>
-                  <polygon points={ptsStr} fill="#f6fef7" stroke="black" strokeWidth={1.2} />
-                  {pl.pts.map((pt:any,i:number)=>{
-                    const nxt=pl.pts[(i+1)%pl.pts.length];
-                    const mx=(pt.x+nxt.x)/2, my=(pt.y+nxt.y)/2;
-                    const len=pl.sides[i]; const txt=len? `${Number(len).toFixed(2)}` : '';
-                    if(!txt) return null;
-                    const ang=Math.atan2(nxt.y-pt.y, nxt.x-pt.x)*180/Math.PI;
-                    return <text key={i} x={mx} y={my} fontSize={4.5} fill="#1e3a8a" textAnchor="middle" transform={`rotate(${ang},${mx},${my})`}>{txt}</text>;
-                  })}
-                  <text x={pl.cx} y={pl.cy-3} fontSize={6.5} fontWeight={800} fill="#991b1b" textAnchor="middle">{meta?.dagNo || `${456+idx}`}</text>
-                  <text x={pl.cx} y={pl.cy+5} fontSize={6} fontWeight={700} fill="#b91c1c" textAnchor="middle">{tafsils[idx]?.dec || '—'} শতাংশ</text>
+                  <polygon points={ptsStr} fill="#f6fef7" stroke="black" strokeWidth={fs.stroke} strokeLinejoin="round" />
+                  <text x={pl.cx} y={pl.cy-fs.dag*0.15} fontSize={fs.dag} fontWeight={900} fill="#991b1b" textAnchor="middle" stroke="white" strokeWidth={fs.dag*0.12} paintOrder="stroke">{meta?.dagNo || report.dagNo || `${idx+1}`}</text>
+                  <text x={pl.cx} y={pl.cy+fs.dec*1.05} fontSize={fs.dec} fontWeight={800} fill="#b91c1c" textAnchor="middle" stroke="white" strokeWidth={fs.dec*0.12} paintOrder="stroke">{tafsils[idx]?.dec || '—'} শতাংশ</text>
                 </g>;
-              }) : (drawing?.segments||[]).map((sg:any)=> <line key={sg.id} x1={sg.x1} y1={sg.y1} x2={sg.x2} y2={sg.y2} stroke="black" strokeWidth={0.9}/>)}
+              }) : (drawing?.segments||[]).map((sg:any)=> <line key={sg.id} x1={sg.x1} y1={sg.y1} x2={sg.x2} y2={sg.y2} stroke="black" strokeWidth={fs.stroke} strokeLinecap="round"/>)}
+              {sideLabels.map(l=> (
+                <text key={l.key} x={l.x} y={l.y} fontSize={fs.side} fontWeight={800} fill="#1e3a8a" textAnchor="middle" dominantBaseline="central" stroke="white" strokeWidth={fs.side*(l.onLine?0.5:0.18)} strokeLinejoin="round" paintOrder="stroke" transform={`rotate(${l.ang},${l.x},${l.y})`}>{l.txt}</text>
+              ))}
             </svg>
             </ResizableFigure>
             <div style={{position:'absolute', left:6, bottom:6, background:'#f0fdf4', border:'1px solid #14532d', borderRadius:8, padding:'6px 8px', fontSize:9, lineHeight:1.3, minWidth:92}}>
               <div style={{fontWeight:900, textAlign:'center', color:'#14532d'}}>লেজেন্ড</div>
               <div style={{marginTop:4, display:'flex', alignItems:'center', gap:6}}><span style={{width:28, height:2, background:'black', display:'block'}}></span><span>দাগ সীমানা</span></div>
               <div style={{display:'flex', alignItems:'center', gap:6}}><span style={{width:28, textAlign:'center', fontWeight:700, color:'#b91c1c'}}>৪৫৬</span><span>দাগ নম্বর</span></div>
-              <div style={{display:'flex', alignItems:'center', gap:6}}><span style={{width:28, textAlign:'center', color:'#1e40af'}}>25.60</span><span>দৈর্ঘ্য (মিটার)</span></div>
+              <div style={{display:'flex', alignItems:'center', gap:6}}><span style={{width:28, textAlign:'center', color:'#1e40af', fontWeight:800}}>40′ 6″</span><span>দৈর্ঘ্য (ফুট-ইঞ্চি)</span></div>
             </div>
             <div style={{position:'absolute', right:6, bottom:6, background:'#f0fdf4', border:'1px solid #14532d', borderRadius:8, padding:'6px 10px', textAlign:'center', minWidth:110}}>
               <div style={{fontSize:10, fontWeight:700, color:'#14532d'}}>মোট জমির পরিমাণ</div>

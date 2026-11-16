@@ -524,8 +524,9 @@ export function findRings(segments: CanvasSeg[]): Ring[] {
 
 /** রিংয়ের ৪ বাহু → উত্তর/পূর্ব/দক্ষিণ/পশ্চিম (স্ক্রিনে উপর = উত্তর) */
 function ringSides(r: Ring): { n: number; e: number; s: number; w: number } | null {
-  const lens = r.segs.map((s) => s.lengthFt || 0);
-  if (lens.some((v) => !(v > 0))) return null;
+  // যে বাহুর মাপ দেওয়া হয়নি সেটা ০ — বাহুভিত্তিকে খালি ঘর হিসেবে আসবে
+  const lens = r.segs.map((s) => (s.lengthFt && s.lengthFt > 0 ? s.lengthFt : 0));
+  if (lens.every((v) => !(v > 0))) return null; // কোনো মাপই নেই — শুধু রেখা
   const P = r.pts;
   const cx = P.reduce((a, p) => a + p.x, 0) / 4;
   const cy = P.reduce((a, p) => a + p.y, 0) / 4;
@@ -576,7 +577,7 @@ export function syncCanvasIntoDraft(d: BahuDraft): { draft: BahuDraft; changed: 
 
   for (const r of rings) {
     const sides = ringSides(r);
-    if (!sides) continue; // কোনো বাহুর দৈর্ঘ্য নেই — এই রিং বাদ
+    if (!sides) continue; // কোনো বাহুরই দৈর্ঘ্য নেই — এই রিং বাদ
     // বেশিরভাগ (≥২) দাগ যে বাহু-প্লটের, রিংটা সেই প্লট (একটা দাগ নতুন করে টানলেও মেলে)
     const count: Record<string, number> = {};
     for (const s of r.segs) {
@@ -596,7 +597,7 @@ export function syncCanvasIntoDraft(d: BahuDraft): { draft: BahuDraft; changed: 
     matched.add(p.id);
     let sideChanged = false;
     for (const k of ['n', 'e', 's', 'w'] as const) {
-      if (!sameFt(p[k], sides[k])) {
+      if (sides[k] > 0 && !sameFt(p[k], sides[k])) {
         p[k] = feetToFtIn(sides[k]);
         sideChanged = true;
       }
@@ -644,6 +645,8 @@ export function syncCanvasIntoDraft(d: BahuDraft): { draft: BahuDraft; changed: 
 /** সম্পন্ন জরিপ সংরক্ষণ + পুরনো খসড়া রিপোর্ট বাদ (নতুন মাপে রিপোর্ট হবে) */
 export function commitCompleted(d: BahuDraft, onSave: (s: SurveyRecord) => void, bookingId?: string): SurveyRecord {
   const survey = draftToSurvey(d, 'completed', bookingId);
+  const snap = canvasSnapshotFor(d);
+  if (snap) survey.drawing = snap;
   try {
     const reps = getStoredReports();
     const keep = reps.filter((r) => !(r.surveyId === survey.id && r.status === 'draft'));
@@ -656,3 +659,100 @@ export function commitCompleted(d: BahuDraft, onSave: (s: SurveyRecord) => void,
 }
 
 export const SYNC_NOTE_KEY = 'fa_bahu_sync_note';
+
+
+/* ============================================================
+   চিত্র ভিত্তিক → সম্পন্ন / রিপোর্ট
+   ============================================================ */
+
+/** ক্যানভাসের ড্রয়িং এই খসড়া থেকেই এসেছে / এর সাথে যুক্ত? */
+export function isCanvasLinked(d: BahuDraft | null): boolean {
+  const h = readHandoff();
+  return !!(d && h && h.draftId === d.id);
+}
+
+/** ক্যানভাস যুক্ত এবং বাহুর মাপ পরে বদলানো হয়নি (তাহলে ক্যানভাসের নকশাই ঠিক) */
+export function canvasMatchesDraft(d: BahuDraft | null): boolean {
+  const h = readHandoff();
+  if (!d || !h || h.draftId !== d.id) return false;
+  return h.sidesSig === segSig(buildCanvasDrawing(d).segments);
+}
+
+/**
+ * শুধু ক্যানভাসে আঁকা নকশা (বাহুর তথ্য ছাড়া) → নতুন খসড়া বানিয়ে ক্যানভাসের সাথে যুক্ত করি।
+ * ক্যানভাসের প্রতিটি ৪-বাহুর প্লট খসড়ার একটি প্লট হয়। প্লট না থাকলে null।
+ */
+export function newDraftFromCanvas(): BahuDraft | null {
+  const canvas = readCanvas();
+  if (!canvas.segments.length) return null;
+  const base: BahuDraft = { ...newDraft(), plots: [] };
+  writeHandoff({ draftId: base.id, sidesSig: '', canvasSig: '', plotIds: [], ringMap: {}, fromCanvas: true });
+  const r = syncCanvasIntoDraft(base);
+  const real = r.draft.plots.filter((p) => ['n', 'e', 's', 'w'].some((k) => ftInToFeet(p[k as SideKey]) > 0));
+  if (!real.length) return null;
+  return { ...r.draft, plots: real, activePlotId: real[0].id };
+}
+
+/** সম্পন্ন করার সময় ক্যানভাসের নকশার ছবি জরিপের সাথে রেখে দিই (রিপোর্টে হুবহু সেই নকশা) */
+export function canvasSnapshotFor(d: BahuDraft): SurveyRecord['drawing'] | undefined {
+  if (!canvasMatchesDraft(d)) return undefined;
+  const c = readCanvas();
+  if (!c.segments.length) return undefined;
+  return { segments: c.segments.map((x) => ({ ...x })), plots: c.plots.map((x) => ({ ...x })), updatedAt: Date.now() };
+}
+
+/** একবারের বার্তা — বাহুভিত্তিক পেজ খুললে দেখাবে */
+export const BAHU_MSG_KEY = 'fa_bahu_msg';
+export function setBahuMsg(m: string) {
+  try {
+    sessionStorage.setItem(BAHU_MSG_KEY, m);
+  } catch {
+    /* ignore */
+  }
+}
+export function takeBahuMsg(): string | null {
+  try {
+    const m = sessionStorage.getItem(BAHU_MSG_KEY);
+    sessionStorage.removeItem(BAHU_MSG_KEY);
+    return m;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * রিপোর্টের জন্য সঠিক নকশা:
+ * ১) ক্যানভাস এই জরিপের খসড়ার সাথে যুক্ত → ক্যানভাস (সবচেয়ে নতুন)
+ * ২) জরিপে রাখা নকশা (সম্পন্ন করার সময়ের)
+ * ৩) বাহুর মাপ থেকে বানানো নকশা
+ * null → পুরনো নিয়মে ক্যানভাস
+ */
+export function reportDrawingFor(surveyId: string | undefined): { segments: CanvasSeg[]; plots: PlotMeta[] } | null {
+  if (!surveyId) return null;
+  const d = loadDraft();
+  if (d && d.surveyId === surveyId) {
+    if (canvasMatchesDraft(d)) {
+      const c = readCanvas();
+      if (c.segments.length) return c;
+    }
+    // খসড়াই সবচেয়ে নতুন (বাহুতে মাপ বদলানো হয়ে থাকতে পারে)
+    const b = buildCanvasDrawing(d);
+    if (b.segments.length) return b;
+  }
+  let survey: SurveyRecord | undefined;
+  try {
+    const all = JSON.parse(localStorage.getItem('bhumi_surveys') || '[]') as SurveyRecord[];
+    survey = Array.isArray(all) ? all.find((x) => x && x.id === surveyId) : undefined;
+  } catch {
+    survey = undefined;
+  }
+  if (!survey) return null;
+  if (survey.drawing && Array.isArray(survey.drawing.segments) && survey.drawing.segments.length) {
+    return { segments: survey.drawing.segments, plots: survey.drawing.plots || [] };
+  }
+  if (survey.plots && survey.plots.length) {
+    const b = buildCanvasDrawing(draftFromSurvey(survey));
+    if (b.segments.length) return b;
+  }
+  return null;
+}
