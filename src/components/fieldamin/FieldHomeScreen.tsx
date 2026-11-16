@@ -3,12 +3,13 @@
  * (design-previews/01-home.html)
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Compass, Spline, FileText, ArrowRight, Ruler, PenLine, ChevronRight } from 'lucide-react';
+import { Compass, Spline, FileText, ArrowRight, Ruler, PenLine, ChevronRight, Phone, Calendar } from 'lucide-react';
 import { SurveyRecord } from '../../types';
-import { useProfile } from '../../lib/profileStore';
+import { useProfile, telHref } from '../../lib/profileStore';
 import { formatNow, toBnDigits } from '../../lib/banglaDate';
 import { getStoredReports } from '../../lib/survey-report-utils';
 import { initialSurveys } from '../../data/mockData';
+import { WorkBooking, bookingsOn, getAllBookings, nextBooking, todayStr } from '../../lib/workBookings';
 
 interface Props {
   surveys: SurveyRecord[];
@@ -16,7 +17,16 @@ interface Props {
   onOpenHandMap: () => void;
   onOpenReports: () => void;
   onOpenSurvey: (surveyId: string) => void;
+  onOpenCalendar: () => void;
 }
+
+/** "14:30" → "২:৩০ দুপুর" */
+const timeBn = (t: string) => {
+  const [h, m] = t.split(':').map((x) => parseInt(x, 10) || 0);
+  const part = h < 4 ? 'রাত' : h < 12 ? 'সকাল' : h < 16 ? 'দুপুর' : h < 18 ? 'বিকেল' : h < 20 ? 'সন্ধ্যা' : 'রাত';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${toBnDigits(h12)}:${toBnDigits(String(m).padStart(2, '0'))} ${part}`;
+};
 
 /** পুরোনো অ্যাপের নমুনা সার্ভে — হিসাব ও সাম্প্রতিক তালিকায় গোনা হবে না */
 const SAMPLE_IDS = new Set(initialSurveys.map((s) => s.id));
@@ -48,7 +58,7 @@ const TONE = [
   'bg-violet-100 text-violet-700',
 ];
 
-export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpenHandMap, onOpenReports, onOpenSurvey }) => {
+export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpenHandMap, onOpenReports, onOpenSurvey, onOpenCalendar }) => {
   const profile = useProfile();
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -56,6 +66,21 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
     return () => window.clearInterval(t);
   }, []);
   const dt = formatNow(now);
+
+  // ধাপ ৯ — আজকের কাজ (ক্যালেন্ডারের বুকিং, IndexedDB)
+  const [todayJobs, setTodayJobs] = useState<WorkBooking[]>([]);
+  const [nextJob, setNextJob] = useState<WorkBooking | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    getAllBookings().then((all) => {
+      if (!alive) return;
+      setTodayJobs(bookingsOn(all, todayStr()));
+      setNextJob(nextBooking(all));
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const real = useMemo(() => surveys.filter((s) => !SAMPLE_IDS.has(s.id)), [surveys]);
   const today = now.toDateString();
@@ -128,6 +153,64 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
             <span className="block text-[13px] font-bold text-slate-700 mt-1 leading-tight">{x.t}</span>
           </div>
         ))}
+      </div>
+
+      {/* ধাপ ৯ — আজকের কাজ */}
+      <div className="mx-4 mt-2.5">
+        {nextJob && nextJob.date === todayStr() ? (
+          <button
+            onClick={onOpenCalendar}
+            className="w-full text-left bg-[#fde68a] rounded-[22px] p-3.5 flex items-center gap-3 shadow-[0_2px_10px_rgba(15,23,42,.05)] active:scale-[.98] transition"
+          >
+            <span className="w-[52px] h-[52px] shrink-0 rounded-2xl bg-[#065f46] text-white flex flex-col items-center justify-center">
+              <Calendar className="w-6 h-6" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <small className="block text-[13px] font-bold text-amber-800">পরের কাজ · {timeBn(nextJob.time)}</small>
+              <b className="block text-[17px] font-extrabold text-slate-900 leading-tight truncate">{nextJob.name}</b>
+              <span className="block text-sm font-semibold text-slate-700 truncate">
+                {nextJob.place}
+                {todayJobs.length > 1 ? ` · আজ আরও ${toBnDigits(todayJobs.length - 1)}টি` : ''}
+              </span>
+            </span>
+            <a
+              href={telHref(nextJob.phone)}
+              aria-label="কল করুন"
+              onClick={(e) => e.stopPropagation()}
+              className="w-12 h-12 shrink-0 rounded-full bg-[#065f46] text-white flex items-center justify-center"
+            >
+              <Phone className="w-5 h-5" />
+            </a>
+          </button>
+        ) : todayJobs.length > 0 ? (
+          <button
+            onClick={onOpenCalendar}
+            className="w-full text-left bg-white rounded-[22px] p-3.5 flex items-center gap-3 shadow-[0_2px_10px_rgba(15,23,42,.05)] active:scale-[.98] transition"
+          >
+            <span className="w-[52px] h-[52px] shrink-0 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+              <Calendar className="w-6 h-6" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <b className="block text-[17px] font-extrabold text-slate-900 leading-tight">আজকের কাজ</b>
+              <span className="block text-sm font-semibold text-slate-600">আজ {toBnDigits(todayJobs.length)}টি কাজ আছে</span>
+            </span>
+            <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+          </button>
+        ) : (
+          <button
+            onClick={onOpenCalendar}
+            className="w-full text-left bg-white rounded-[22px] p-3.5 flex items-center gap-3 shadow-[0_2px_10px_rgba(15,23,42,.05)] active:scale-[.98] transition"
+          >
+            <span className="w-[52px] h-[52px] shrink-0 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center">
+              <Calendar className="w-6 h-6" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <b className="block text-[17px] font-extrabold text-slate-900 leading-tight">আজকের কাজ</b>
+              <span className="block text-sm font-semibold text-slate-600">আজ কোনো কাজ নেই — ক্যালেন্ডারে বুকিং রাখুন</span>
+            </span>
+            <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+          </button>
+        )}
       </div>
 
       {/* বড় টাইল */}

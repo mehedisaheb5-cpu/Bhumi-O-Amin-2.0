@@ -3,10 +3,10 @@
  * প্রোফাইল কার্ড, সবুজ কল বোতাম, Facebook + ঠিকানা, মেনু।
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Phone, MapPin, Facebook, Camera, Briefcase, House, Compass, Spline, FileText, Lock } from 'lucide-react';
+import { X, Phone, MapPin, Facebook, Camera, Briefcase, House, Compass, Spline, FileText, Lock, Calendar } from 'lucide-react';
 import { useProfile, telHref } from '../../lib/profileStore';
 
-export type SideMenuId = 'home' | 'possession' | 'handmap' | 'reports' | 'admin';
+export type SideMenuId = 'home' | 'possession' | 'handmap' | 'reports' | 'calendar' | 'admin' | 'profile';
 
 interface SidePanelProps {
   open: boolean;
@@ -20,6 +20,7 @@ const MENU: Array<{ id: SideMenuId; label: string; icon: React.ReactNode }> = [
   { id: 'possession', label: 'দখল পরিমাপ', icon: <Compass className="w-[22px] h-[22px]" /> },
   { id: 'handmap', label: 'হ্যান্ড ম্যাপ', icon: <Spline className="w-[22px] h-[22px]" /> },
   { id: 'reports', label: 'রিপোর্ট', icon: <FileText className="w-[22px] h-[22px]" /> },
+  { id: 'calendar', label: 'কাজের ক্যালেন্ডার', icon: <Calendar className="w-[22px] h-[22px]" /> },
   { id: 'admin', label: 'এডমিন', icon: <Lock className="w-[22px] h-[22px]" /> },
 ];
 
@@ -104,8 +105,16 @@ export const SidePanel: React.FC<SidePanelProps> = ({ open, active, onClose, onN
           </button>
         </div>
 
-        {/* প্রোফাইল কার্ড */}
-        <div className="mx-3.5 mt-2 mb-3 bg-white rounded-[28px] p-4 flex items-center gap-3.5 shadow-[0_4px_14px_rgba(15,23,42,.06)]">
+        {/* প্রোফাইল কার্ড — চাপলে প্রোফাইল পাতা খোলে (ধাপ ৯) */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onNavigate('profile')}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onNavigate('profile');
+          }}
+          className="mx-3.5 mt-2 mb-3 bg-white rounded-[28px] p-4 flex items-center gap-3.5 shadow-[0_4px_14px_rgba(15,23,42,.06)] cursor-pointer active:scale-[.98] transition"
+        >
           <div className="relative w-20 h-20 shrink-0 rounded-full bg-gradient-to-b from-emerald-200 to-emerald-400 text-emerald-900">
             <div className="absolute inset-0 rounded-full overflow-hidden flex items-end justify-center">
               {p.photo ? (
@@ -115,7 +124,10 @@ export const SidePanel: React.FC<SidePanelProps> = ({ open, active, onClose, onN
               )}
             </div>
             <button
-              onClick={() => showToast('ছবি বদলাতে: এডমিন → সেটিংস')}
+              onClick={(e) => {
+                e.stopPropagation();
+                showToast('ছবি বদলাতে: প্রোফাইল পাতা খুলুন');
+              }}
               aria-label="ছবি বদলান"
               className="absolute -right-0.5 -bottom-0.5 w-[30px] h-[30px] rounded-full bg-white text-emerald-800 flex items-center justify-center shadow-[0_2px_6px_rgba(0,0,0,.25)]"
             >

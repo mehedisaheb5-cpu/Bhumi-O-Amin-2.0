@@ -18,7 +18,6 @@ import { LandCalculatorScreen } from './components/LandCalculatorScreen';
 import { SurveyReportScreen } from './components/report/SurveyReportScreen';
 import { MouzaRateScreen } from './components/rates/MouzaRateScreen';
 import { AminServicesScreen } from './components/AminServicesScreen';
-import { ProfileScreen } from './components/ProfileScreen';
 import { ChatModal } from './components/ChatModal';
 import { SidePanel, SideMenuId } from './components/fieldamin/SidePanel';
 import { ConverterScreen } from './components/fieldamin/ConverterScreen';
@@ -31,6 +30,13 @@ import { FieldHomeScreen } from './components/fieldamin/FieldHomeScreen';
  * অ্যাপ সাদা হয়ে গিয়েছিল। এই import() শুধু এডমিন খুললেই লোড হয়।)
  */
 const AdminScreen = lazy(() => import('./components/admin/AdminScreen'));
+
+/**
+ * ধাপ ৯ — প্রোফাইল ও ক্যালেন্ডার আলাদা chunk-এ lazy-load হয়, স্টার্টআপের module গ্রাফে থাকে না।
+ * (ধাপ ৮-এর এডমিনের মতোই — ধাপ ৭-এর শিক্ষা।)
+ */
+const OwnerProfileScreen = lazy(() => import('./components/profile/OwnerProfileScreen'));
+const WorkCalendarScreen = lazy(() => import('./components/profile/WorkCalendarScreen'));
 
 /**
  * ফিল্ড আমিন: পুরোনো অ্যাপের হোম (খতিয়ান, উত্তরাধিকার, দলিল, মৌজা ম্যাপ, AI চ্যাট কার্ড) লুকানো।
@@ -76,7 +82,8 @@ export type AppScreenId =
   // ফিল্ড আমিন
   | 'converter'
   | 'handmap'
-  | 'admin';
+  | 'admin'
+  | 'calendar';
 
 export interface AppScreenState {
   screenId: AppScreenId;
@@ -106,6 +113,7 @@ export default function App() {
     if (hash === '#converter') return { screenId: 'converter' };
     if (hash === '#handmap') return { screenId: 'handmap' };
     if (hash === '#admin') return { screenId: 'admin' };
+    if (hash === '#calendar') return { screenId: 'calendar' };
     return { screenId: 'home' };
   });
 
@@ -377,6 +385,10 @@ export default function App() {
         return { screenId: 'reports' };
       case 'admin':
         return { screenId: 'admin' };
+      case 'calendar':
+        return { screenId: 'calendar' };
+      case 'profile':
+        return { screenId: 'profile' };
       default:
         return { screenId: 'home' };
     }
@@ -413,6 +425,10 @@ export default function App() {
         return 'reports';
       case 'admin':
         return 'admin';
+      case 'calendar':
+        return 'calendar';
+      case 'profile':
+        return 'profile';
       default:
         return null;
     }
@@ -523,6 +539,7 @@ export default function App() {
             onOpenHandMap={() => navigateTo({ screenId: 'handmap' })}
             onOpenReports={() => navigateTo({ screenId: 'reports' })}
             onOpenSurvey={(sId) => navigateTo({ screenId: 'possession', surveyId: sId })}
+            onOpenCalendar={() => navigateTo({ screenId: 'calendar' })}
           />
         )}
         {currentScreen.screenId === 'home' && SHOW_LEGACY_HOME && (
@@ -792,24 +809,23 @@ export default function App() {
           </div>
         )}
 
-        {/* 11. ইউজার প্রোফাইল ও সেটিংস (User Profile & Account) */}
+        {/* 11. ফিল্ড আমিন: মালিকের প্রোফাইল (ধাপ ৯, ডিজাইন B — lazy chunk) */}
+        {/* পুরোনো ProfileScreen ফাইলটি রেখে দেওয়া হয়েছে, শুধু এই রুটে আর দেখানো হয় না */}
         {currentScreen.screenId === 'profile' && (
-          <div className="space-y-3">
-            <button
-              onClick={goBack}
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-emerald-900 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs transition active:scale-95"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>{lang === 'bn' ? 'হোম' : 'Home'}</span>
-            </button>
-            <ProfileScreen
-              lang={lang}
-              onToggleLang={handleToggleLang}
+          <Suspense
+            fallback={
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-[15px] font-bold text-slate-500">
+                প্রোফাইল লোড হচ্ছে…
+              </div>
+            }
+          >
+            <OwnerProfileScreen
               surveys={surveys}
-              onSelectSurvey={(_s) => navigateTo({ screenId: 'measure_possession' })}
-              onOpenReport={() => navigateTo({ screenId: 'reports' })}
+              onBack={goBack}
+              onOpenCalendar={() => navigateTo({ screenId: 'calendar' })}
+              onOpenAdmin={() => navigateTo({ screenId: 'admin' })}
             />
-          </div>
+          </Suspense>
         )}
         {/* ফিল্ড আমিন: পরিমাপ কনভার্টার (নিচের বারের ট্যাব) */}
         {currentScreen.screenId === 'converter' && <ConverterScreen />}
@@ -837,6 +853,19 @@ export default function App() {
               onBack={goBack}
               onOpenReport={(reportId) => navigateTo({ screenId: 'reports', reportId })}
             />
+          </Suspense>
+        )}
+
+        {/* ফিল্ড আমিন: কাজের ক্যালেন্ডার (ধাপ ৯, ডিজাইন B — lazy chunk) */}
+        {currentScreen.screenId === 'calendar' && (
+          <Suspense
+            fallback={
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-[15px] font-bold text-slate-500">
+                ক্যালেন্ডার লোড হচ্ছে…
+              </div>
+            }
+          >
+            <WorkCalendarScreen onBack={goBack} />
           </Suspense>
         )}
       </main>

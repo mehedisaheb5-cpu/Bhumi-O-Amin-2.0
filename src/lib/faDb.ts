@@ -1,11 +1,12 @@
 /**
- * ফিল্ড আমিন — IndexedDB (বড় ডেটা: হ্যান্ড ম্যাপের ছবি, পরে রিপোর্ট/লোগো/ক্যালেন্ডার)।
+ * ফিল্ড আমিন — IndexedDB (বড় ডেটা: হ্যান্ড ম্যাপের ছবি, লোগো, কাজের ক্যালেন্ডারের বুকিং)।
  * সম্পূর্ণ অফলাইন, শুধু এই ফোনে থাকে। নতুন store লাগলে DB_VERSION বাড়িয়ে upgrade-এ যোগ করুন।
+ * v2 (ধাপ ৯): 'bookings' store যোগ — কাজের ক্যালেন্ডারের বুকিং।
  */
 const DB_NAME = 'fa-bhumi';
-const DB_VERSION = 1;
-export type StoreName = 'handmaps' | 'kv';
-const STORES: StoreName[] = ['handmaps', 'kv'];
+const DB_VERSION = 2;
+export type StoreName = 'handmaps' | 'kv' | 'bookings';
+const STORES: StoreName[] = ['handmaps', 'kv', 'bookings'];
 
 let dbp: Promise<IDBDatabase> | null = null;
 
