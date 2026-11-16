@@ -751,6 +751,7 @@ export default function App() {
             lang={lang}
             onBack={goBack}
             onGoToSurvey={() => navigateTo({ screenId: 'possession' })}
+            onGoToHandMap={(sId) => navigateTo({ screenId: 'handmap', surveyId: sId })}
           />
         )}
 

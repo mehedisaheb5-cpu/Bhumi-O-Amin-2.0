@@ -19,6 +19,12 @@ import {
   Info,
   Link2,
   Copy,
+  ClipboardCheck,
+  Eye,
+  Send,
+  FileDown,
+  ImageDown,
+  MessageCircle,
 } from 'lucide-react';
 import { SurveyRecord, SurveyReportRecord, Language, ReportStatus } from '../../types';
 import {
@@ -35,6 +41,15 @@ import { ReportEditorModal } from './ReportEditorModal';
 import { ReportListView } from './ReportListView';
 import { formatNumberByLang } from '../../lib/land-units';
 import { printWithNoto } from '../../lib/print-utils';
+import { idbGetAll } from '../../lib/faDb';
+import {
+  reportToPdfBlob,
+  reportPagesToPngs,
+  shareFiles,
+  sharePdfViaWhatsApp,
+  reportFileName,
+  downloadBlob,
+} from '../../lib/report-export';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   isFirebaseConfigured,
@@ -57,6 +72,7 @@ interface SurveyReportScreenProps {
   lang: Language;
   onBack: () => void;
   onGoToSurvey: () => void;
+  onGoToHandMap?: (surveyId: string) => void;
 }
 
 export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
@@ -67,6 +83,7 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
   lang,
   onBack,
   onGoToSurvey,
+  onGoToHandMap,
 }) => {
   const { currentUser } = useAuth();
   const isBn = lang === 'bn';
@@ -168,6 +185,28 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
   // Share toast
   const [shareMsg, setShareMsg] = useState<string | null>(null);
 
+  // ধাপ ৭: ৩ ধাপের উইজার্ড — যাচাই → দেখুন → পাঠান (A-এর সিস্টেম, B-এর ডিজাইন)
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(initialReportId ? 2 : 1);
+  const [busy, setBusy] = useState<'pdf' | 'png' | 'wa' | 'share' | null>(null);
+  const [handMapCount, setHandMapCount] = useState(0);
+
+  // এই জরিপের সংরক্ষিত হ্যান্ড ম্যাপ কয়টি (যাচাই তালিকার জন্য)
+  useEffect(() => {
+    const sid = currentReport?.surveyId;
+    if (!sid) { setHandMapCount(0); return; }
+    let alive = true;
+    idbGetAll<{ surveyId?: string | null }>('handmaps')
+      .then((all) => { if (alive) setHandMapCount(all.filter((r) => r.surveyId === sid).length); })
+      .catch(() => { if (alive) setHandMapCount(0); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentReport?.surveyId, activeTab]);
+
+  const showToast = (msg: string) => {
+    setShareMsg(msg);
+    setTimeout(() => setShareMsg(null), 3500);
+  };
+
   // Currently selected survey object
   const activeSurvey = useMemo(() => {
     return surveys.find((s) => s.id === selectedSurveyId) || null;
@@ -177,6 +216,47 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
   const validation = useMemo(() => {
     return validateSurveyForReport(activeSurvey);
   }, [activeSurvey]);
+
+  // ধাপ ৭ — যাচাই তালিকা (ধাপ ১)
+  const partyOk = !!(currentReport?.clientName && currentReport.clientName !== 'জমি মালিক / আবেদনকারী');
+  const checks: Array<{ label: string; detail: string; ok: boolean; onAdd: (() => void) | null }> = currentReport
+    ? [
+        {
+          label: isBn ? 'মৌজা ও দাগ' : 'Mouza & Dag',
+          detail: `${currentReport.mouza || '—'} • দাগ ${currentReport.dagNo || '—'}`,
+          ok: !!(currentReport.mouza && currentReport.dagNo),
+          onAdd: () => setIsEditorOpen(true),
+        },
+        {
+          label: isBn ? 'পক্ষের নাম' : 'Party Name',
+          detail: currentReport.clientName || '—',
+          ok: partyOk,
+          onAdd: () => setIsEditorOpen(true),
+        },
+        {
+          label: isBn ? 'বাহুর মাপ / পরিমাপ' : 'Measurements',
+          detail: isBn ? validation.reasonBn : validation.reasonEn,
+          ok: validation.isValid,
+          onAdd: () => onGoToSurvey(),
+        },
+        {
+          label: isBn ? 'হ্যান্ড ম্যাপ' : 'Hand Map',
+          detail: handMapCount > 0 ? (isBn ? `${handMapCount}টি যোগ করা আছে` : `${handMapCount} added`) : (isBn ? 'এখনো যোগ করা হয়নি' : 'Not added yet'),
+          ok: handMapCount > 0,
+          onAdd: () => {
+            const sid = activeSurvey?.id || currentReport.surveyId;
+            if (onGoToHandMap && sid) onGoToHandMap(sid);
+            else showToast(isBn ? 'হ্যান্ড ম্যাপ স্ক্রিনে গিয়ে "রিপোর্টে যোগ" চাপুন' : 'Open Hand Map and tap "Add to report"');
+          },
+        },
+        {
+          label: isBn ? 'স্বাক্ষর ঘর' : 'Signature Box',
+          detail: isBn ? 'পাতায় আছে' : 'On the page',
+          ok: true,
+          onAdd: null,
+        },
+      ]
+    : [];
 
   // When selectedSurveyId changes, create or load matching report
   const handleSelectSurveyChange = (surveyId: string) => {
@@ -333,6 +413,86 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
       return;
     }
     setTimeout(()=> setShareMsg(null), 3000);
+  };
+
+  // ধাপ ৭ — PDF ডাউনলোড (ছবি-ভিত্তিক PDF, বাংলা ঠিক থাকে)
+  const handleDownloadPdf = async () => {
+    if (!currentReport || busy) return;
+    setBusy('pdf');
+    try {
+      saveReportRecord(currentReport);
+      setSavedReports(getStoredReports());
+      const blob = await reportToPdfBlob(2);
+      downloadBlob(blob, reportFileName(currentReport.reportNumber, 'pdf'));
+      showToast(isBn ? 'PDF ডাউনলোড হলো ✓' : 'PDF downloaded ✓');
+    } catch {
+      showToast(isBn ? 'PDF হয়নি — প্রিন্ট দিয়ে PDF নিন' : 'PDF failed — use Print instead');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // ধাপ ৭ — PNG ছবি (প্রতি পাতা আলাদা ফাইল)
+  const handleDownloadPng = async () => {
+    if (!currentReport || busy) return;
+    setBusy('png');
+    try {
+      saveReportRecord(currentReport);
+      setSavedReports(getStoredReports());
+      const pngs = await reportPagesToPngs(2);
+      pngs.forEach((b, i) =>
+        downloadBlob(b, reportFileName(currentReport.reportNumber, 'png', pngs.length > 1 ? i + 1 : undefined))
+      );
+      showToast(isBn ? `ছবি (PNG) ডাউনলোড হলো ✓ (${pngs.length} পাতা)` : `PNG downloaded ✓ (${pngs.length} pages)`);
+    } catch {
+      showToast(isBn ? 'ছবি হয়নি — প্রিন্ট দিয়ে PDF নিন' : 'PNG failed — use Print instead');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // ধাপ ৭ — PDF ফাইল অন্য অ্যাপে শেয়ার (Android শেয়ার শিট)
+  const handleSharePdfFile = async () => {
+    if (!currentReport || busy) return;
+    setBusy('share');
+    try {
+      saveReportRecord(currentReport);
+      setSavedReports(getStoredReports());
+      const blob = await reportToPdfBlob(2);
+      const file = new File([blob], reportFileName(currentReport.reportNumber, 'pdf'), { type: 'application/pdf' });
+      const text = isBn
+        ? `${currentReport.reportNumber} — ${currentReport.mouza || ''} মৌজা, দাগ ${currentReport.dagNo || '—'} | ভূমি ও আমিন`
+        : `${currentReport.reportNumber} — ${currentReport.mouza || ''} Mouza | Bhumi O Amin`;
+      const outcome = await shareFiles([file], 'ভূমি সার্ভে রিপোর্ট', text);
+      if (outcome === 'shared') showToast(isBn ? 'শেয়ার সম্পন্ন ✓' : 'Shared ✓');
+      else if (outcome === 'downloaded') showToast(isBn ? 'শেয়ার হয় না — PDF সেভ হলো' : 'Sharing unavailable — PDF saved');
+    } catch {
+      showToast(isBn ? 'শেয়ার হয়নি — আবার চেষ্টা করুন' : 'Share failed — try again');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // ধাপ ৭ — WhatsApp-এ PDF পাঠানো
+  const handleWhatsApp = async () => {
+    if (!currentReport || busy) return;
+    setBusy('wa');
+    try {
+      saveReportRecord(currentReport);
+      setSavedReports(getStoredReports());
+      const blob = await reportToPdfBlob(2);
+      const text = isBn
+        ? `${currentReport.reportNumber} — ${currentReport.mouza || ''} মৌজা, দাগ ${currentReport.dagNo || '—'} | ভূমি ও আমিন`
+        : `${currentReport.reportNumber} — ${currentReport.mouza || ''} Mouza | Bhumi O Amin`;
+      const shareUrl = `${window.location.origin}${window.location.pathname}#report/${currentReport.id}`;
+      const outcome = await sharePdfViaWhatsApp(blob, reportFileName(currentReport.reportNumber, 'pdf'), text, shareUrl);
+      if (outcome === 'shared') showToast(isBn ? 'শেয়ার মেনু খুলেছে — WhatsApp বাছুন ✓' : 'Share sheet opened — pick WhatsApp ✓');
+      else if (outcome === 'unsupported') showToast(isBn ? 'WhatsApp খুলেছে — PDF ফোনে সেভ হয়েছে, হাতে সংযুক্ত করুন' : 'WhatsApp opened — PDF saved, attach it manually');
+    } catch {
+      showToast(isBn ? 'WhatsApp-এ পাঠানো যায়নি — আবার চেষ্টা করুন' : 'WhatsApp share failed — try again');
+    } finally {
+      setBusy(null);
+    }
   };
 
   // Handle selecting a report from the list
@@ -558,7 +718,7 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
           />
         )}
 
-        {/* TAB 2: A4 REPORT PREVIEW */}
+        {/* TAB 2: A4 REPORT PREVIEW — ধাপ ৭: যাচাই → দেখুন → পাঠান */}
         {activeTab === 'preview' && (
           <div className="space-y-4">
             {/* Case 1: No surveys available */}
@@ -585,59 +745,218 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
                   <span>{isBn ? 'নতুন জিপিএস সার্ভে শুরু করুন' : 'Start New GPS Survey'}</span>
                 </button>
               </div>
-            ) : !validation.isValid ? (
-              /* Case 2: Selected survey has fewer than 3 points */
-              <div className="p-6 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 space-y-3 shadow-xs">
-                <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
-                  <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />
-                  <span>{isBn ? 'পর্যাপ্ত পয়েন্ট নেই' : 'Insufficient Survey Points'}</span>
-                </div>
-                <p className="text-xs text-amber-900/90 leading-relaxed">
-                  {isBn ? validation.reasonBn : validation.reasonEn}
-                </p>
-                <div className="pt-1 flex items-center gap-2">
-                  <button
-                    onClick={onGoToSurvey}
-                    className="px-4 py-2 rounded-xl bg-amber-800 text-white text-xs font-bold hover:bg-amber-900 transition active:scale-95"
-                  >
-                    {isBn ? 'সার্ভেতে গিয়ে পয়েন্ট যোগ করুন' : 'Go to Survey to Add Points'}
-                  </button>
-                </div>
-              </div>
             ) : currentReport ? (
-              /* Case 3: Valid Survey & Report Ready */
-              <div className="space-y-4">
-                {/* Print Guidance Note Bar */}
-                <div className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl border border-slate-200 text-xs shadow-xs print:hidden">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Info className="w-4 h-4 text-emerald-800 shrink-0" />
-                    <span className="text-[11px]">
-                      {isBn
-                        ? 'পিডিএফ ডাউনলোড করতে উপরের "প্রিন্ট / PDF" বাটনে চাপ দিন এবং ডেস্টিনেশন "Save as PDF" নির্বাচন করুন।'
-                        : 'To download as PDF, click "Print / PDF" and select "Save as PDF" as the destination.'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0 text-slate-500">
+              <>
+                {/* ধাপ ৭ — ৩ ধাপের স্টেপার (A-এর সিস্টেম: সরল তালিকা, B-এর ডিজাইন: সবুজ + সোনালি) */}
+                <div className="print:hidden bg-white rounded-2xl border border-emerald-900/20 shadow-xs p-2 flex items-center gap-2">
+                  {([
+                    { n: 1 as const, label: isBn ? 'যাচাই' : 'Verify', icon: <ClipboardCheck className="w-5 h-5" /> },
+                    { n: 2 as const, label: isBn ? 'দেখুন' : 'Preview', icon: <Eye className="w-5 h-5" /> },
+                    { n: 3 as const, label: isBn ? 'পাঠান' : 'Send', icon: <Send className="w-5 h-5" /> },
+                  ]).map((s) => (
                     <button
-                      onClick={() => setZoomLevel(zoomLevel === 'fit' ? '100%' : 'fit')}
-                      className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-bold hover:bg-slate-50 transition"
-                      title={isBn ? 'জুম পরিবর্তন' : 'Toggle Zoom'}
+                      key={s.n}
+                      onClick={() => setWizardStep(s.n)}
+                      className={`flex-1 min-h-[52px] rounded-xl flex items-center justify-center gap-2 text-[15px] font-black transition active:scale-[0.98] ${
+                        wizardStep === s.n
+                          ? 'bg-[#065f46] text-white border-2 border-[#f59e0b]'
+                          : wizardStep > s.n
+                            ? 'bg-emerald-50 text-emerald-900 border-2 border-emerald-200'
+                            : 'bg-slate-50 text-slate-500 border-2 border-slate-200'
+                      }`}
                     >
-                      {zoomLevel === 'fit' ? (isBn ? '১০০% সাইজ' : '100% Size') : (isBn ? 'স্ক্রিন ফিট' : 'Fit Screen')}
+                      <span className={wizardStep === s.n ? 'text-[#fde68a]' : ''}>{s.icon}</span>
+                      <span>{s.n}. {s.label}</span>
+                      {wizardStep > s.n && <span className="text-[#f59e0b]">✓</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ধাপ ১: যাচাই */}
+                {wizardStep === 1 && (
+                  <div className="print:hidden space-y-3">
+                    <div className="bg-white rounded-2xl border border-emerald-900/20 shadow-xs p-4">
+                      <h2 className="text-base font-black text-emerald-950 flex items-center gap-2">
+                        <ClipboardCheck className="w-5 h-5 text-emerald-800" />
+                        {isBn ? '১. যাচাই করুন' : '1. Verify'}
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {isBn ? 'রিপোর্ট পাঠানোর আগে সব তথ্য ঠিক আছে কি না দেখে নিন।' : 'Check everything before sending the report.'}
+                      </p>
+                      <ul className="mt-3 space-y-2">
+                        {checks.map((c) => (
+                          <li key={c.label} className="flex items-center gap-3 min-h-[52px] px-3 py-2 rounded-xl border border-slate-200 bg-slate-50">
+                            <span className={`w-8 h-8 shrink-0 rounded-full flex items-center justify-center text-base font-black ${c.ok ? 'bg-emerald-800 text-white' : 'bg-amber-400 text-amber-950'}`}>
+                              {c.ok ? '✓' : '!'}
+                            </span>
+                            <span className="flex-1 min-w-0">
+                              <span className="block text-[15px] font-bold text-slate-800">{c.label}</span>
+                              <span className="block text-xs text-slate-500 truncate">{c.detail}</span>
+                            </span>
+                            {c.ok ? (
+                              <span className="text-xs font-bold text-emerald-800 shrink-0">{isBn ? 'ঠিক আছে' : 'OK'}</span>
+                            ) : c.onAdd ? (
+                              <button
+                                onClick={c.onAdd}
+                                className="shrink-0 min-h-[48px] px-4 rounded-xl bg-amber-400 text-amber-950 text-[15px] font-black shadow-xs active:scale-95"
+                              >
+                                {isBn ? 'যোগ করুন' : 'Add'}
+                              </button>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <button
+                      onClick={() => setWizardStep(2)}
+                      className="w-full min-h-[52px] rounded-2xl bg-[#065f46] text-white text-base font-black shadow-sm active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      {isBn ? 'দেখুন →' : 'Preview →'}
                     </button>
                   </div>
-                </div>
+                )}
 
-                {/* A4 Paper Document Container */}
-                <div
-                  className={`w-full overflow-x-auto pb-8 print:p-0 print:overflow-visible ${
-                    zoomLevel === 'fit' ? 'flex justify-center' : 'block'
-                  }`}
-                >
-                  <ReportDocumentA4 report={currentReport} lang={lang} />
-                </div>
-              </div>
+                {/* ধাপ ২ ও ৩: পরিমাপ ঠিক না থাকলে আগের সতর্কবার্তাই দেখাবে */}
+                {wizardStep !== 1 && !validation.isValid && (
+                  <div className="p-6 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 space-y-3 shadow-xs print:hidden">
+                    <div className="flex items-center gap-2 font-bold text-sm text-amber-900">
+                      <AlertTriangle className="w-5 h-5 text-amber-700 shrink-0" />
+                      <span>{isBn ? 'পর্যাপ্ত পয়েন্ট নেই' : 'Insufficient Survey Points'}</span>
+                    </div>
+                    <p className="text-xs text-amber-900/90 leading-relaxed">
+                      {isBn ? validation.reasonBn : validation.reasonEn}
+                    </p>
+                    <div className="pt-1 flex items-center gap-2">
+                      <button
+                        onClick={onGoToSurvey}
+                        className="px-4 py-2 rounded-xl bg-amber-800 text-white text-xs font-bold hover:bg-amber-900 transition active:scale-95"
+                      >
+                        {isBn ? 'সার্ভেতে গিয়ে পয়েন্ট যোগ করুন' : 'Go to Survey to Add Points'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ধাপ ২: দেখুন (আগের প্রিভিউ, অপরিবর্তিত) */}
+                {wizardStep === 2 && validation.isValid && (
+                  <div className="space-y-4">
+                    {/* Print Guidance Note Bar */}
+                    <div className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl border border-slate-200 text-xs shadow-xs print:hidden">
+                      <div className="flex items-center gap-2 text-slate-600">
+                        <Info className="w-4 h-4 text-emerald-800 shrink-0" />
+                        <span className="text-[11px]">
+                          {isBn
+                            ? 'PDF ডাউনলোড করতে "পাঠান" ধাপে যান, অথবা উপরের "প্রিন্ট / PDF" বাটনে চাপ দিন এবং ডেস্টিনেশন "Save as PDF" নির্বাচন করুন।'
+                            : 'To download as PDF, go to the "Send" step, or click "Print / PDF" and select "Save as PDF".'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0 text-slate-500">
+                        <button
+                          onClick={() => setZoomLevel(zoomLevel === 'fit' ? '100%' : 'fit')}
+                          className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-bold hover:bg-slate-50 transition"
+                          title={isBn ? 'জুম পরিবর্তন' : 'Toggle Zoom'}
+                        >
+                          {zoomLevel === 'fit' ? (isBn ? '১০০% সাইজ' : '100% Size') : (isBn ? 'স্ক্রিন ফিট' : 'Fit Screen')}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* A4 Paper Document Container */}
+                    <div
+                      className={`w-full overflow-x-auto pb-8 print:p-0 print:overflow-visible ${
+                        zoomLevel === 'fit' ? 'flex justify-center' : 'block'
+                      }`}
+                    >
+                      <ReportDocumentA4 report={currentReport} lang={lang} />
+                    </div>
+
+                    <button
+                      onClick={() => setWizardStep(3)}
+                      className="print:hidden w-full min-h-[52px] rounded-2xl bg-[#065f46] text-white text-base font-black shadow-sm active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      {isBn ? 'পাঠান →' : 'Send →'}
+                    </button>
+                  </div>
+                )}
+
+                {/* ধাপ ৩: পাঠান — ৪টি বড় কার্ড (B-এর ডিজাইন: সবুজ + সোনালি) */}
+                {wizardStep === 3 && validation.isValid && (
+                  <div className="print:hidden space-y-3">
+                    <div className="bg-white rounded-2xl border border-emerald-900/20 shadow-xs p-4">
+                      <h2 className="text-base font-black text-emerald-950 flex items-center gap-2">
+                        <Send className="w-5 h-5 text-emerald-800" />
+                        {isBn ? '৩. পাঠান' : '3. Send'}
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {currentReport.reportNumber} • {isBn ? '২ পাতা' : '2 pages'} • {currentReport.mouza || '—'} {isBn ? 'মৌজা' : 'Mouza'}
+                      </p>
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <button
+                          onClick={handleDownloadPdf}
+                          disabled={busy !== null}
+                          className="min-h-[96px] rounded-2xl bg-[#065f46] text-white p-3 flex flex-col items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] disabled:opacity-60"
+                        >
+                          <FileDown className="w-7 h-7 text-[#fde68a]" />
+                          <span className="text-[15px] font-black leading-tight">{busy === 'pdf' ? (isBn ? 'তৈরি হচ্ছে…' : 'Working…') : (isBn ? 'PDF ডাউনলোড' : 'Download PDF')}</span>
+                          <span className="text-[11px] opacity-80">A4 • {isBn ? 'বাংলা ঠিক থাকবে' : 'Bengali safe'}</span>
+                        </button>
+                        <button
+                          onClick={handleDownloadPng}
+                          disabled={busy !== null}
+                          className="min-h-[96px] rounded-2xl bg-[#065f46] text-white p-3 flex flex-col items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] disabled:opacity-60"
+                        >
+                          <ImageDown className="w-7 h-7 text-[#fde68a]" />
+                          <span className="text-[15px] font-black leading-tight">{busy === 'png' ? (isBn ? 'তৈরি হচ্ছে…' : 'Working…') : (isBn ? 'PNG ছবি' : 'PNG Image')}</span>
+                          <span className="text-[11px] opacity-80">{isBn ? 'প্রতি পাতা আলাদা' : 'One file per page'}</span>
+                        </button>
+                        <button
+                          onClick={handlePrint}
+                          disabled={busy !== null}
+                          className="min-h-[96px] rounded-2xl bg-[#065f46] text-white p-3 flex flex-col items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] disabled:opacity-60"
+                        >
+                          <Printer className="w-7 h-7 text-[#fde68a]" />
+                          <span className="text-[15px] font-black leading-tight">{isBn ? 'প্রিন্ট' : 'Print'}</span>
+                          <span className="text-[11px] opacity-80">{isBn ? 'প্রিন্ট / Save as PDF' : 'Print / Save as PDF'}</span>
+                        </button>
+                        <button
+                          onClick={handleWhatsApp}
+                          disabled={busy !== null}
+                          className="min-h-[96px] rounded-2xl bg-[#065f46] text-white p-3 flex flex-col items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] disabled:opacity-60"
+                        >
+                          <MessageCircle className="w-7 h-7 text-[#fde68a]" />
+                          <span className="text-[15px] font-black leading-tight">{busy === 'wa' ? (isBn ? 'তৈরি হচ্ছে…' : 'Working…') : 'WhatsApp'}</span>
+                          <span className="text-[11px] opacity-80">{isBn ? 'PDF সংযুক্ত করে' : 'With PDF attached'}</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleSharePdfFile}
+                        disabled={busy !== null}
+                        className="mt-3 w-full min-h-[52px] rounded-2xl bg-white border-2 border-[#f59e0b] text-emerald-950 text-[15px] font-black shadow-xs active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60"
+                      >
+                        <Share2 className="w-5 h-5 text-emerald-800" />
+                        {busy === 'share' ? (isBn ? 'তৈরি হচ্ছে…' : 'Working…') : (isBn ? 'অন্য অ্যাপে শেয়ার' : 'Share to other apps')}
+                      </button>
+                      <p className="text-[11px] text-slate-500 mt-2 text-center">
+                        {isBn ? 'PDF ফাইল শেয়ার হবে — WhatsApp, Messenger, Gmail…' : 'Shares the PDF file — WhatsApp, Messenger, Gmail…'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setWizardStep(2)}
+                      className="w-full min-h-[52px] rounded-2xl bg-white border-2 border-emerald-800 text-emerald-900 text-base font-black shadow-xs active:scale-[0.98]"
+                    >
+                      {isBn ? '← দেখুন' : '← Preview'}
+                    </button>
+                  </div>
+                )}
+
+                {/* ধাপ ৩-এ এক্সপোর্টের জন্য পাতা DOM-এ থাকতে হয় — পর্দায় লুকানো, প্রিন্টে দেখা যায় */}
+                {wizardStep === 3 && validation.isValid && (
+                  <div className="step3-hidden-report" style={{ position: 'absolute', left: -10000, top: 0, visibility: 'hidden' }} aria-hidden="true">
+                    <ReportDocumentA4 report={currentReport} lang={lang} />
+                  </div>
+                )}
+              </>
             ) : null}
           </div>
         )}
@@ -653,6 +972,9 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
           onSave={handleEditorSave}
         />
       )}
+
+      {/* ধাপ ৭: ধাপ ৩-এর লুকানো রিপোর্ট — পর্দায় অফ-স্ক্রিন, প্রিন্টে স্বাভাবিক */}
+      <style>{`@media print { .step3-hidden-report { position: static !important; left: auto !important; top: auto !important; visibility: visible !important; } }`}</style>
     </div>
   );
 };

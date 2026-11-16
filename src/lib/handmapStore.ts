@@ -214,8 +214,8 @@ async function toDataUrl(url: string): Promise<string> {
     fr.readAsDataURL(blob);
   });
 }
-/** অফলাইনেও ছবিতে বাংলা ঠিক দেখাতে ফন্ট SVG-র ভেতরে বসাই */
-function embeddedFontCss(): Promise<string> {
+/** অফলাইনেও ছবিতে বাংলা ঠিক দেখাতে ফন্ট SVG-র ভেতরে বসাই (ধাপ ৭-এর রিপোর্ট PNG/PDF-তেও একই প্যাটার্ন) */
+export function embeddedFontCss(): Promise<string> {
   if (!fontCss) {
     fontCss = (async () => {
       try {

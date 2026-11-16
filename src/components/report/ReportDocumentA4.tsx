@@ -3,11 +3,24 @@ import { SurveyReportRecord, Language, SurveyDrawing, PlotMeta } from '../../typ
 import { formatNumberByLang, roundClean } from '../../lib/land-units';
 import { printWithNoto } from '../../lib/print-utils';
 import { reportDrawingFor } from '../../lib/bahuDraftStore';
+import { useProfile } from '../../lib/profileStore';
+import { idbGetAll } from '../../lib/faDb';
 import { ResizableFigure, FigureXform, loadFigureXform, saveFigureXform, clearFigureXform } from './ResizableFigure';
+
+interface StoredHandMap {
+  id: string;
+  surveyId?: string | null;
+  png?: Blob | string;
+  rec?: { name?: string; dag?: string; mouza?: string };
+}
 
 interface Props { report: SurveyReportRecord; lang: Language; }
 
 export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
+  // ধাপ ৭: হেডারে আমিনের নাম + ফোন (profileStore থেকে)
+  const profile = useProfile();
+  // পক্ষের নাম: রিপোর্টের clientName (জেনেরিক ফলব্যাক নয়) — মালিকের টেবিলের ১ম সারিতে বসে
+  const partyName = report.clientName && report.clientName !== 'জমি মালিক / আবেদনকারী' ? report.clientName : '';
   const [header, setHeader] = useState({
     mouza: report.mouza || 'শালিখা',
     jlNo: report.jlNo || '১২৩',
@@ -37,8 +50,32 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
 
   const [comments, setComments] = useState(report.notes || '');
   const [owners, setOwners] = useState<Array<{name:string,father:string,address:string,deed:string,khatian:string,dag:string,percent:string}>>(
-    Array.from({length:4},()=>({name:'',father:'',address:'',deed:'',khatian:'',dag:'',percent:''}))
+    Array.from({length:4},(_,i)=>({name: i===0 ? partyName : '',father:'',address:'',deed:'',khatian:'',dag:'',percent:''}))
   );
+  // ধাপ ৭: এই জরিপের সংরক্ষিত হ্যান্ড ম্যাপ (IndexedDB fa-bhumi/handmaps, surveyId মিলিয়ে — সবগুলো)
+  const [handMaps, setHandMaps] = useState<Array<{id:string; name:string; dag:string; mouza:string; url:string}>>([]);
+  useEffect(()=>{
+    let alive = true;
+    const urls: string[] = [];
+    (async ()=>{
+      try {
+        const all = await idbGetAll<StoredHandMap>('handmaps');
+        // শুধু এই জরিপেরগুলো; চিত্র ভিত্তিক (surveyId null, id canvas:...) কোনো জরিপের সাথে
+        // মেলানো যায় না বলে দেখানো হয় না — নতুন ডেটা মডেল বানানো হয়নি
+        const mine = all.filter((r) => r && r.surveyId && r.surveyId === report.surveyId);
+        const list: Array<{id:string; name:string; dag:string; mouza:string; url:string}> = [];
+        for (const r of mine) {
+          let url = '';
+          if (r.png instanceof Blob) { url = URL.createObjectURL(r.png); urls.push(url); }
+          else if (typeof r.png === 'string' && r.png) url = r.png;
+          if (!url) continue;
+          list.push({ id: r.id, name: r.rec?.name || '', dag: r.rec?.dag || '', mouza: r.rec?.mouza || '', url });
+        }
+        if (alive) setHandMaps(list);
+      } catch { /* IndexedDB না থাকলে হ্যান্ড ম্যাপ ছাড়াই রিপোর্ট চলবে */ }
+    })();
+    return ()=> { alive = false; urls.forEach((u) => URL.revokeObjectURL(u)); };
+  },[report.id, report.surveyId]);
   const updateOwner=(i:number,patch:any)=> setOwners(v=> v.map((r,idx)=> idx===i? {...r,...patch}:r));
   const [purchase, setPurchase] = useState('');
   const [compromise, setCompromise] = useState('');
@@ -58,7 +95,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
       let eraw = localStorage.getItem(EDITS_KEY);
       // migrate old global key if per-report not found
       if(!eraw) eraw = localStorage.getItem('bhumi_report_edits_v1');
-      if(eraw){ const d=JSON.parse(eraw); if(d.header) setHeader(d.header); if(d.tagline) setTagline(d.tagline); if(d.subTagline) setSubTagline(d.subTagline); if(d.mapTitle) setMapTitle(d.mapTitle); if(d.northText) setNorthText(d.northText); if(Array.isArray(d.features)&&d.features.length) setFeatures(d.features); if(d.footerLeft) setFooterLeft(d.footerLeft); if(d.footerMid) setFooterMid(d.footerMid); if(d.footerRight) setFooterRight(d.footerRight); if(d.comments!==undefined) setComments(d.comments); if(Array.isArray(d.owners)&&d.owners.length===4) setOwners(d.owners); if(d.purchase!==undefined) setPurchase(d.purchase); if(d.compromise!==undefined) setCompromise(d.compromise);} }catch{}
+      if(eraw){ const d=JSON.parse(eraw); if(d.header) setHeader(d.header); if(d.tagline) setTagline(d.tagline); if(d.subTagline) setSubTagline(d.subTagline); if(d.mapTitle) setMapTitle(d.mapTitle); if(d.northText) setNorthText(d.northText); if(Array.isArray(d.features)&&d.features.length) setFeatures(d.features); if(d.footerLeft) setFooterLeft(d.footerLeft); if(d.footerMid) setFooterMid(d.footerMid); if(d.footerRight) setFooterRight(d.footerRight); if(d.comments!==undefined) setComments(d.comments); if(Array.isArray(d.owners)&&d.owners.length===4){ const saved=d.owners as typeof owners; if(!saved[0].name && partyName) saved[0]={...saved[0], name:partyName}; setOwners(saved); } if(d.purchase!==undefined) setPurchase(d.purchase); if(d.compromise!==undefined) setCompromise(d.compromise);} }catch{}
   },[report.id]);
   useEffect(()=>{ try{ const EDITS_KEY=getEditsKey(); localStorage.setItem(EDITS_KEY, JSON.stringify({header, tagline, subTagline, mapTitle, northText, features, footerLeft, footerMid, footerRight, comments, owners, purchase, compromise})); }catch{} },[header, tagline, subTagline, mapTitle, northText, features, footerLeft, footerMid, footerRight, comments, owners, purchase, compromise, report.id]);
   const clearEdits=()=>{ if(confirm('এই রিপোর্টের সব এডিট মুছবেন?')){ localStorage.removeItem(getEditsKey()); clearFigureXform(report.id, report.surveyId); location.reload(); } };
@@ -242,6 +279,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
               <div style={{fontSize:7, fontWeight:700, color:'#c75a0a', marginTop:3}}>সঠিক মাপ • নির্ভুল তথ্য</div>
             </div>
             <input value={subTagline} onChange={e=> setSubTagline(e.target.value)} style={{marginTop:8, width:'100%', textAlign:'center', fontSize:9, color:'#475569', border:'1px solid #cbd5e1', borderRadius:4, padding:'2px 4px', background:'rgba(255,255,255,0.9)'}} />
+            <div style={{marginTop:4, fontSize:11, fontWeight:800, color:'#14532d', textAlign:'center'}}>{profile.name} • {profile.phone}</div>
           </div>
           {/* right */}
           <div style={{width:'62mm', border:'1px solid #14532d', borderRadius:10, overflow:'hidden', background:'white', flexShrink:0}}>
@@ -356,6 +394,21 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
             </tbody>
           </table>
         </div>
+
+        {/* ধাপ ৭: সংরক্ষিত হ্যান্ড ম্যাপ (২য় পাতা, মালিকের বিবরণের সাথে) */}
+        {handMaps.length > 0 && (
+          <div style={{marginTop:10, border:'1px solid #14532d', borderRadius:8, overflow:'hidden', position:'relative', zIndex:1}}>
+            <div style={{background:'#14532d', color:'white', fontSize:11, fontWeight:700, padding:'6px 10px'}}>হ্যান্ড ম্যাপ</div>
+            <div style={{display:'flex', flexWrap:'wrap', gap:8, padding:8, background:'#f0fdf4'}}>
+              {handMaps.map((hm) => (
+                <figure key={hm.id} style={{margin:0, textAlign:'center'}}>
+                  <img src={hm.url} alt={`হ্যান্ড ম্যাপ — দাগ ${hm.dag || '—'}`} style={{maxHeight:'80mm', maxWidth:'95mm', width:'auto', display:'block', border:'1px solid #a7f3d0', borderRadius:4, background:'white'}} />
+                  <figcaption style={{fontSize:10, marginTop:3, color:'#334155'}}>{hm.name ? `${hm.name} • ` : ''}দাগ {hm.dag || '—'}{hm.mouza ? ` • ${hm.mouza}` : ''}</figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div style={{marginTop:10, display:'flex', flexDirection:'column', gap:10, flex:1, position:'relative', zIndex:1, minHeight:0}}>
           <div style={{border:'1px solid #14532d', borderRadius:8, overflow:'hidden'}}>
