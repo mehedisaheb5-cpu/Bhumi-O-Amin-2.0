@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Compass, MessageSquare, User, Shield, Briefcase, LogIn, LogOut, Bell, Menu } from 'lucide-react';
+import { AppLogo } from './brand/AppLogo';
 import { useProfile } from '../lib/profileStore';
 import { Language, AppNotification } from '../types';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -27,17 +28,6 @@ interface HeaderProps {
  * (মুছে ফেলা হয়নি)। পরে একাধিক আমিনের জন্য লগইন চালু হলে true করলেই ফিরবে।
  */
 const SHOW_LEGACY_HEADER_ACTIONS = false;
-
-/** নামের প্রথম অক্ষর (বাংলা যুক্তাক্ষর/কার ঠিক রেখে) */
-const firstLetter = (name: string) => {
-  const t = name.trim();
-  if (!t) return '';
-  const Seg = (Intl as unknown as { Segmenter?: new (l: string, o: { granularity: string }) => { segment: (s: string) => Iterable<{ segment: string }> } }).Segmenter;
-  if (Seg) {
-    for (const g of new Seg('bn', { granularity: 'grapheme' }).segment(t)) return g.segment;
-  }
-  return Array.from(t)[0];
-};
 
 export const Header: React.FC<HeaderProps> = ({
   lang,
@@ -106,24 +96,20 @@ export const Header: React.FC<HeaderProps> = ({
             <h1 className="text-[18px] font-extrabold leading-tight text-slate-900 truncate">
               {isBn ? 'ফিল্ড আমিন' : 'Field Amin'}
             </h1>
-            <p className="text-[13px] font-semibold text-slate-600 leading-tight truncate">
+            <p className="text-[13px] font-normal text-slate-600 leading-tight truncate">
               {isBn ? 'ভূমি ও আমিন' : 'Bhumi O Amin'}
             </p>
           </button>
         </div>
 
-        {/* প্রোফাইল বৃত্ত — চাপলে সাইড প্যানেল */}
+        {/* ভূমি ও আমিন লোগো — চাপলে সাইড প্যানেল (প্রিভিউ 14/19-C) */}
         <button
           id="header-avatar-btn"
           onClick={onOpenMenu}
           aria-label={profile.name}
-          className="w-12 h-12 shrink-0 rounded-full bg-[#065f46] text-white text-lg font-extrabold flex items-center justify-center overflow-hidden active:scale-95 transition"
+          className="w-12 h-12 shrink-0 rounded-full flex items-center justify-center overflow-hidden active:scale-95 transition"
         >
-          {profile.photo ? (
-            <img src={profile.photo} alt="" className="w-full h-full object-cover" />
-          ) : (
-            firstLetter(profile.name)
-          )}
+          <AppLogo size={48} />
         </button>
 
         {/* Action Controls (পুরোনো — লুকানো) */}

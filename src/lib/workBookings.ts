@@ -30,6 +30,10 @@ export interface WorkBooking {
   /** অগ্রিম পাওয়া (টাকা) */
   advance: number;
   note?: string;
+  /** রিমাইন্ডার: আগের দিন সন্ধ্যা ৭টা (অনুপস্থিত = বন্ধ) */
+  remEvening?: boolean;
+  /** রিমাইন্ডার: কাজের ১ ঘণ্টা আগে (অনুপস্থিত = চালু — আগের আচরণ) */
+  remHour?: boolean;
   status: 'todo' | 'done' | 'cancelled';
   createdAt: number;
 }
@@ -124,6 +128,30 @@ export function findClash(
   );
 }
 
+/** আগের দিন সন্ধ্যা ৭টার রিমাইন্ডার চালু কি না (পুরোনো বুকিংয়ে অনুপস্থিত = বন্ধ) */
+export function hasEveningReminder(b: WorkBooking): boolean {
+  return b.remEvening === true;
+}
+
+/** কাজের ১ ঘণ্টা আগের রিমাইন্ডার চালু কি না (পুরোনো বুকিংয়ে অনুপস্থিত = চালু) */
+export function hasHourReminder(b: WorkBooking): boolean {
+  return b.remHour !== false;
+}
+
+/** আগামীকালের যেসব বাকি কাজে সন্ধ্যার রিমাইন্ডার চালু আছে */
+export function tomorrowReminders(list: WorkBooking[], now = new Date()): WorkBooking[] {
+  const tmr = addDaysStr(toDateStr(now), 1);
+  return sortBookings(list).filter((b) => b.date === tmr && b.status === 'todo' && hasEveningReminder(b));
+}
+
+/** রিমাইন্ডারের সংক্ষিপ্ত লেখা (বিস্তারিত পাতা / টোস্টের জন্য) */
+export function reminderText(b: WorkBooking): string {
+  const parts: string[] = [];
+  if (hasEveningReminder(b)) parts.push('আগের দিন সন্ধ্যা ৭টা');
+  if (hasHourReminder(b)) parts.push('কাজের ১ ঘণ্টা আগে');
+  return parts.length ? parts.join(' · ') : 'রিমাইন্ডার বন্ধ';
+}
+
 export function dueAmount(b: WorkBooking): number {
   return b.status === 'done' || b.status === 'cancelled' ? 0 : Math.max(0, (b.fee || 0) - (b.advance || 0));
 }
@@ -153,7 +181,9 @@ export function nextBooking(list: WorkBooking[], now = new Date()): WorkBooking 
   );
 }
 
-/** একটা বুকিংয়ের .ics ফাইল (ফোনের ক্যালেন্ডারে যোগ করা যায়, ১ ঘণ্টা আগে রিমাইন্ডার)। */
+/** একটা বুকিংয়ের .ics ফাইল (ফোনের ক্যালেন্ডারে যোগ করা যায়)।
+ * রিমাইন্ডার: সন্ধ্যারটা আগের দিন ১৯:০০-তে নির্দিষ্ট VALARM,
+ * ১ ঘণ্টা আগেরটা আপেক্ষিক VALARM — ফোনের ক্যালেন্ডারেই অ্যালার্ম বাজে। */
 export function bookingToIcs(b: WorkBooking): string {
   const d = b.date.replace(/-/g, '');
   const startMin = timeToMin(b.time);
@@ -174,14 +204,27 @@ export function bookingToIcs(b: WorkBooking): string {
       [`ক্লায়েন্ট: ${b.name}`, `ফোন: ${b.phone}`, `ঠিকানা: ${b.address}`, b.mouza ? `মৌজা: ${b.mouza}` : '', b.dag ? `দাগ: ${b.dag}` : '', `ধরন: ${b.type}`, `ফি: ${b.fee} টাকা, অগ্রিম: ${b.advance} টাকা`, b.note ? `নোট: ${b.note}` : ''].filter(Boolean).join('\n'),
     )}`,
     `LOCATION:${esc(b.place)}`,
-    'BEGIN:VALARM',
-    'TRIGGER:-PT1H',
-    'ACTION:DISPLAY',
-    `DESCRIPTION:${esc(`পরিমাপ — ${b.name}`)}`,
-    'END:VALARM',
-    'END:VEVENT',
-    'END:VCALENDAR',
   ];
+  if (hasEveningReminder(b)) {
+    const eve = addDaysStr(b.date, -1).replace(/-/g, '');
+    lines.push(
+      'BEGIN:VALARM',
+      `TRIGGER;VALUE=DATE-TIME:${eve}T190000`,
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${esc(`আগামীকাল পরিমাপ — ${b.name} (${b.place})`)}`,
+      'END:VALARM',
+    );
+  }
+  if (hasHourReminder(b)) {
+    lines.push(
+      'BEGIN:VALARM',
+      'TRIGGER:-PT1H',
+      'ACTION:DISPLAY',
+      `DESCRIPTION:${esc(`পরিমাপ — ${b.name}`)}`,
+      'END:VALARM',
+    );
+  }
+  lines.push('END:VEVENT', 'END:VCALENDAR');
   return lines.join('\r\n');
 }
 

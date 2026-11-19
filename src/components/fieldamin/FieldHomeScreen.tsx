@@ -3,13 +3,13 @@
  * (design-previews/01-home.html)
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { Compass, Spline, FileText, ArrowRight, Ruler, PenLine, ChevronRight, Phone, Calendar } from 'lucide-react';
+import { Compass, Spline, FileText, ArrowRight, Ruler, PenLine, ChevronRight, Phone, Calendar, Bell } from 'lucide-react';
 import { SurveyRecord } from '../../types';
 import { useProfile, telHref } from '../../lib/profileStore';
 import { formatNow, toBnDigits } from '../../lib/banglaDate';
 import { getStoredReports } from '../../lib/survey-report-utils';
 import { initialSurveys } from '../../data/mockData';
-import { WorkBooking, bookingsOn, getAllBookings, nextBooking, todayStr } from '../../lib/workBookings';
+import { WorkBooking, bookingsOn, getAllBookings, nextBooking, todayStr, tomorrowReminders } from '../../lib/workBookings';
 
 interface Props {
   surveys: SurveyRecord[];
@@ -70,12 +70,15 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
   // ধাপ ৯ — আজকের কাজ (ক্যালেন্ডারের বুকিং, IndexedDB)
   const [todayJobs, setTodayJobs] = useState<WorkBooking[]>([]);
   const [nextJob, setNextJob] = useState<WorkBooking | undefined>(undefined);
+  // প্রিভিউ 14 — আগামীকালের কাজ, সন্ধ্যার রিমাইন্ডার চালু থাকলে হোমে জানাবে
+  const [tmrRem, setTmrRem] = useState<WorkBooking[]>([]);
   useEffect(() => {
     let alive = true;
     getAllBookings().then((all) => {
       if (!alive) return;
       setTodayJobs(bookingsOn(all, todayStr()));
       setNextJob(nextBooking(all));
+      setTmrRem(tomorrowReminders(all));
     });
     return () => {
       alive = false;
@@ -116,7 +119,7 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
     <div id="field-home" className="-mx-3.5 sm:mx-0 -mt-3.5 pb-2 bg-[#eef2f1] min-h-[calc(100dvh-70px)]">
       {/* স্বাগতম */}
       <div className="px-[18px] pt-3 pb-1">
-        <small className="text-sm font-semibold text-slate-600">স্বাগতম,</small>
+        <small className="text-sm font-normal text-slate-600">স্বাগতম,</small>
         <h1 className="text-[28px] font-extrabold leading-tight text-slate-900">{profile.name}</h1>
       </div>
 
@@ -166,9 +169,9 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
               <Calendar className="w-6 h-6" />
             </span>
             <span className="flex-1 min-w-0">
-              <small className="block text-[13px] font-bold text-amber-800">পরের কাজ · {timeBn(nextJob.time)}</small>
+              <small className="block text-[13px] font-normal text-amber-800">পরের কাজ · {timeBn(nextJob.time)}</small>
               <b className="block text-[17px] font-extrabold text-slate-900 leading-tight truncate">{nextJob.name}</b>
-              <span className="block text-sm font-semibold text-slate-700 truncate">
+              <span className="block text-sm font-normal text-slate-700 truncate">
                 {nextJob.place}
                 {todayJobs.length > 1 ? ` · আজ আরও ${toBnDigits(todayJobs.length - 1)}টি` : ''}
               </span>
@@ -192,7 +195,7 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
             </span>
             <span className="flex-1 min-w-0">
               <b className="block text-[17px] font-extrabold text-slate-900 leading-tight">আজকের কাজ</b>
-              <span className="block text-sm font-semibold text-slate-600">আজ {toBnDigits(todayJobs.length)}টি কাজ আছে</span>
+              <span className="block text-sm font-normal text-slate-600">আজ {toBnDigits(todayJobs.length)}টি কাজ আছে</span>
             </span>
             <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
           </button>
@@ -206,9 +209,28 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
             </span>
             <span className="flex-1 min-w-0">
               <b className="block text-[17px] font-extrabold text-slate-900 leading-tight">আজকের কাজ</b>
-              <span className="block text-sm font-semibold text-slate-600">আজ কোনো কাজ নেই — ক্যালেন্ডারে বুকিং রাখুন</span>
+              <span className="block text-sm font-normal text-slate-600">আজ কোনো কাজ নেই — ক্যালেন্ডারে বুকিং রাখুন</span>
             </span>
             <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
+          </button>
+        )}
+        {/* প্রিভিউ 14 — আগামীকালের কাজের রিমাইন্ডার (সন্ধ্যা ৭টা) */}
+        {tmrRem.length > 0 && (
+          <button
+            onClick={onOpenCalendar}
+            className="mt-2 w-full text-left bg-[#f0fdf4] border-[1.5px] border-[#86efac] rounded-[22px] p-3 flex items-center gap-2.5 active:scale-[.99] transition"
+          >
+            <span className="w-10 h-10 shrink-0 rounded-xl bg-[#065f46] text-[#fde68a] flex items-center justify-center">
+              <Bell className="w-5 h-5" />
+            </span>
+            <span className="min-w-0">
+              <b className="block text-[15px] font-extrabold text-slate-900">
+                আগামীকাল {toBnDigits(tmrRem.length)}টি কাজ — আজ সন্ধ্যা ৭টায় জানানো হবে
+              </b>
+              <span className="block text-sm font-normal text-slate-600 truncate">
+                {tmrRem.map((b) => `${b.name} · ${timeBn(b.time)}`).join(' · ')}
+              </span>
+            </span>
           </button>
         )}
       </div>

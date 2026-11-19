@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
+  Bell,
   CalendarPlus,
   Check,
   ChevronLeft,
@@ -32,13 +33,17 @@ import {
   dueAmount,
   findClash,
   getAllBookings,
+  hasEveningReminder,
+  hasHourReminder,
   isValidPhone,
   newBookingId,
   nextBooking,
+  reminderText,
   saveBooking,
   timeToMin,
   todayStr,
   toDateStr,
+  tomorrowReminders,
   weekStartStr,
 } from '../../lib/workBookings';
 import { toBnDigits } from '../../lib/banglaDate';
@@ -109,6 +114,10 @@ interface FormState {
   fee: string;
   advance: string;
   note: string;
+  /** রিমাইন্ডার: আগের দিন সন্ধ্যা ৭টা */
+  remEvening: boolean;
+  /** রিমাইন্ডার: কাজের ১ ঘণ্টা আগে */
+  remHour: boolean;
 }
 
 const emptyForm = (date: string): FormState => ({
@@ -124,6 +133,8 @@ const emptyForm = (date: string): FormState => ({
   fee: '',
   advance: '',
   note: '',
+  remEvening: true,
+  remHour: true,
 });
 
 function toForm(b: WorkBooking): FormState {
@@ -141,6 +152,8 @@ function toForm(b: WorkBooking): FormState {
     fee: String(b.fee || ''),
     advance: String(b.advance || ''),
     note: b.note || '',
+    remEvening: hasEveningReminder(b),
+    remHour: hasHourReminder(b),
   };
 }
 
@@ -191,11 +204,23 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
   const stats = useMemo(() => calcStats(bookings), [bookings]);
   const nx = useMemo(() => nextBooking(bookings), [bookings]);
   const selList = useMemo(() => bookingsOn(bookings, sel), [bookings, sel]);
+  /** আগামীকালের কাজ — সন্ধ্যার রিমাইন্ডার চালু থাকলে ব্যানার দেখাবে */
+  const tmrRem = useMemo(() => tomorrowReminders(bookings), [bookings]);
+  const stripRef = useRef<HTMLDivElement | null>(null);
 
   const pickDate = (d: string) => {
     setSel(d);
     setWk(weekStartStr(d));
     setYm(d.slice(0, 7));
+    // বেছে নেওয়া দিনটা স্ট্রিপের মাঝে এনে দিন (jsdom-এ scrollIntoView নেই — গার্ড করা)
+    try {
+      const el = stripRef.current?.querySelector<HTMLButtonElement>(`[data-day="${d}"]`);
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+    } catch {
+      /* স্ক্রল না হলে চুপচাপ — দিন বাছাই এমনিতেই কাজ করে */
+    }
   };
 
   const persist = async (b: WorkBooking) => {
@@ -247,6 +272,8 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
       fee: parseInt(f.fee, 10) || 0,
       advance: parseInt(f.advance, 10) || 0,
       note: f.note.trim() || undefined,
+      remEvening: f.remEvening,
+      remHour: f.remHour,
       status: 'todo',
       createdAt: Date.now(),
     };
@@ -294,7 +321,8 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
     );
   }, [bookings, q]);
 
-  const weekDays = [...Array(7)].map((_, i) => addDaysStr(wk, i));
+  /** সপ্তাহের স্ট্রিপ: ১৪ দিন, পাশাপাশি স্মুথ স্ক্রল (প্রিভিউ 14, ডিজাইন A) */
+  const weekDays = [...Array(14)].map((_, i) => addDaysStr(wk, i));
 
   const monthCells = useMemo(() => {
     const [y, m] = ym.split('-').map(Number);
@@ -345,7 +373,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
             className="mt-3 w-full text-left bg-[#fde68a] text-[#422006] rounded-[18px] p-3.5 flex items-center gap-3 active:scale-[.99] transition"
           >
             <span className="flex-1 min-w-0">
-              <span className="block text-[13px] font-bold opacity-80">
+              <span className="block text-[13px] font-normal opacity-80">
                 পরের কাজ · {relDay(nx.date, today)} {timeLabel(nx.time)} ({untilTxt(nx, now)})
               </span>
               <b className="block text-lg font-extrabold leading-tight truncate">{nx.name}</b>
@@ -386,6 +414,26 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
         </div>
       </div>
 
+      {/* রিমাইন্ডার ব্যানার — আগামীকালের কাজ, সন্ধ্যার রিমাইন্ডার চালু (ডিজাইন A: হালকা সবুজ সারি) */}
+      {tmrRem.length > 0 && (
+        <button
+          onClick={() => pickDate(tmrRem[0].date)}
+          className="w-full text-left bg-[#f0fdf4] border-[1.5px] border-[#86efac] rounded-2xl p-3 flex items-start gap-2.5 active:scale-[.99] transition"
+        >
+          <span className="w-10 h-10 shrink-0 rounded-xl bg-[#065f46] text-[#fde68a] flex items-center justify-center">
+            <Bell className="w-5 h-5" />
+          </span>
+          <span className="min-w-0">
+            <b className="block text-[16px] font-extrabold text-slate-900">
+              আগামীকাল {toBnDigits(tmrRem.length)}টি কাজ — আজ সন্ধ্যা ৭টায় জানানো হবে
+            </b>
+            <span className="block text-sm font-normal text-slate-600 truncate">
+              {tmrRem.map((b) => `${b.name} · ${timeLabel(b.time)}`).join(' · ')}
+            </span>
+          </span>
+        </button>
+      )}
+
       {/* ভিউ বদল */}
       <div className="grid grid-cols-3 gap-1.5 bg-white border border-slate-200 rounded-2xl p-1.5">
         {(
@@ -407,7 +455,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
         ))}
       </div>
 
-      {/* সপ্তাহ ভিউ */}
+      {/* সপ্তাহ ভিউ — ১৪ দিনের স্ট্রিপ, পাশাপাশি স্মুথ স্ক্রল (প্রিভিউ 14, ডিজাইন A) */}
       {view === 'week' && (
         <>
           <div className="flex items-center gap-1.5">
@@ -418,15 +466,20 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
             >
               <ChevronLeft className="w-6 h-6" />
             </button>
-            <div className="flex-1 grid grid-cols-7 gap-1">
+            <div
+              ref={stripRef}
+              className="flex-1 min-w-0 flex gap-2 overflow-x-auto snap-x snap-mandatory scroll-smooth py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              style={{ WebkitOverflowScrolling: 'touch' }}
+            >
               {weekDays.map((d) => {
                 const c = bookingsOn(bookings, d).length;
                 const dd = parseDate(d);
                 return (
                   <button
                     key={d}
+                    data-day={d}
                     onClick={() => pickDate(d)}
-                    className={`rounded-2xl py-2 px-0.5 text-center min-h-[64px] active:scale-95 transition ${
+                    className={`shrink-0 w-[54px] snap-center rounded-2xl py-2 px-0.5 text-center min-h-[64px] active:scale-95 transition ${
                       d === sel
                         ? 'bg-[#065f46] text-white'
                         : d === today
@@ -434,8 +487,8 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
                           : 'bg-white border border-slate-200'
                     }`}
                   >
-                    <small className="block text-[12px] font-bold">{WEEKDAYS[(dd.getDay() + 1) % 7]}</small>
-                    <b className="block text-lg font-extrabold leading-tight">{toBnDigits(dd.getDate())}</b>
+                    <small className="block text-[12px] font-normal">{WEEKDAYS[(dd.getDay() + 1) % 7]}</small>
+                    <b className="block text-lg font-bold leading-tight">{toBnDigits(dd.getDate())}</b>
                     {c > 0 && (
                       <i className={`block text-[11px] font-bold not-italic ${d === sel ? 'text-[#fde68a]' : 'text-[#065f46]'}`}>
                         {toBnDigits(c)}টি
@@ -604,6 +657,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
               {detail.dag && <Row label="দাগ" value={detail.dag} />}
               <Row label="ধরন" value={detail.type} />
               <Row label="ফি" value={`${taka(detail.fee)} · অগ্রিম ${taka(detail.advance)} · বাকি ${taka(dueAmount(detail))}`} />
+              <Row icon={<Bell className="w-5 h-5 text-amber-700" />} label="রিমাইন্ডার" value={reminderText(detail)} />
               {detail.note && <Row label="নোট" value={detail.note} />}
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -885,6 +939,21 @@ function BookingForm({
         <F label="অগ্রিম (টাকা)" value={f.advance} onChange={(v) => set('advance', v.replace(/[^\d]/g, ''))} placeholder="যেমন: ১০০০" inputMode="numeric" />
       </div>
       <F label="নোট" value={f.note} onChange={(v) => set('note', v)} placeholder="যেমন: সকাল ৯টায় পৌঁছাতে হবে" />
+      {/* রিমাইন্ডার — দুটোই একসাথে চালু রাখা যায় (প্রিভিউ 14, ডিজাইন A) */}
+      <div className="mt-3 space-y-2">
+        <ToggleRow
+          checked={f.remEvening}
+          onChange={(v) => set('remEvening', v)}
+          title="আগের দিন সন্ধ্যা ৭টা"
+          sub="আগের দিন সন্ধ্যায় রিমাইন্ডার — ফোনের ক্যালেন্ডারে অ্যালার্ম বসবে"
+        />
+        <ToggleRow
+          checked={f.remHour}
+          onChange={(v) => set('remHour', v)}
+          title="কাজের ১ ঘণ্টা আগে"
+          sub="কাজের ১ ঘণ্টা আগে রিমাইন্ডার — ফোনের ক্যালেন্ডারে অ্যালার্ম বসবে"
+        />
+      </div>
       <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl p-3 mt-3">
         <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
         <p className="text-sm font-semibold text-amber-900">
@@ -910,6 +979,43 @@ function BookingForm({
 }
 
 export default WorkCalendarScreen;
+
+/** টগল সুইচ সহ সাদাসিধে সারি (প্রিভিউ 14, ডিজাইন A-এর rem-row) */
+function ToggleRow({
+  checked,
+  onChange,
+  title,
+  sub,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  title: string;
+  sub: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 border-[1.5px] border-slate-200 rounded-2xl p-3">
+      <Bell className="w-5 h-5 text-amber-700 shrink-0" />
+      <span className="flex-1 min-w-0">
+        <b className="block text-[16px] font-extrabold text-slate-900">{title}</b>
+        <span className="block text-sm font-normal text-slate-500">{sub}</span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={title}
+        onClick={() => onChange(!checked)}
+        className={`relative shrink-0 w-[52px] h-[30px] rounded-full transition ${checked ? 'bg-[#065f46]' : 'bg-slate-300'}`}
+      >
+        <span
+          className={`absolute top-[3px] w-6 h-6 rounded-full bg-white shadow transition-all ${
+            checked ? 'left-[25px]' : 'left-[3px]'
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
 
 function F({
   label,
