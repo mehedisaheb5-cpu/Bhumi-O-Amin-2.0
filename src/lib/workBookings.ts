@@ -57,6 +57,29 @@ export function addDaysStr(dateStr: string, n: number): string {
   return toDateStr(d);
 }
 
+/** কাজের সময়: সকাল ৯টা – বিকেল ৪টা */
+export const WORK_START_HOUR = 9;
+export const WORK_END_HOUR = 16;
+
+/** আজ বুকিং দেওয়া যাবে কি না — বিকেল ৪টা বা তার পরে আর আজকের জন্য নয় */
+export function isTodayBookable(now = new Date()): boolean {
+  return now.getHours() < WORK_END_HOUR;
+}
+
+/** তারিখে বুকিং দেওয়া যাবে কি না — গত তারিখ নয়, আর বিকেল ৪টার পর আজ নয় */
+export function isBookableDate(dateStr: string, now = new Date()): boolean {
+  const t = todayStr(now);
+  if (dateStr < t) return false;
+  if (dateStr === t) return isTodayBookable(now);
+  return true;
+}
+
+/** শুরুর সময় কাজের সময়ের মধ্যে কি না (০৯:০০–১৬:০০, দুই প্রান্তসহ) */
+export function isWithinWorkingHours(time: string): boolean {
+  const m = timeToMin(time);
+  return m >= WORK_START_HOUR * 60 && m <= WORK_END_HOUR * 60;
+}
+
 /** বাংলাদেশের সপ্তাহ শনিবার থেকে শুরু */
 export function weekStartStr(dateStr: string): string {
   const d = new Date(`${dateStr}T12:00:00`);

@@ -191,6 +191,7 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
   const [draft, setDraft] = useState<BahuDraft>(initSync.draft);
   const [errors, setErrors] = useState<Partial<Record<keyof BahuInfo, string>>>({});
   const [savedTick, setSavedTick] = useState(false);
+  const [saveDialog, setSaveDialog] = useState(false);
   const [msg, setMsg] = useState<string | null>(
     initSync.msg || (initSync.changed ? 'চিত্র ভিত্তিকে করা পরিবর্তন বাহুর মাপ ও রিপোর্টে নেওয়া হয়েছে ✓' : null)
   );
@@ -256,11 +257,10 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
   const submitInfo = () => {
     const i = draft.info;
     const e: Partial<Record<keyof BahuInfo, string>> = {};
-    if (!i.clientName.trim()) e.clientName = 'গ্রাহকের নাম লিখুন';
-    if (!i.mouza.trim()) e.mouza = 'মৌজার নাম লিখুন';
-    if (!i.dagNo.trim()) e.dagNo = 'দাগ নং লিখুন';
+    // শুধু নাম ও ফোন বাধ্যতামূলক — মৌজা/দাগ খালি রাখা যায়
+    if (!i.clientName.trim()) e.clientName = 'নাম দিন';
     const ph = normDigits(i.phone).replace(/[\s-]/g, '');
-    if (ph && !/^(\+?88)?01\d{9}$/.test(ph)) e.phone = 'ফোন নম্বর ঠিক নেই (০১ দিয়ে ১১ সংখ্যা)';
+    if (!ph || !/^(\+?88)?01\d{9}$/.test(ph)) e.phone = 'সঠিক মোবাইল নম্বর দিন';
     setErrors(e);
     if (Object.keys(e).length) return;
     update((d) => ({ ...d, infoDone: true }), false);
@@ -287,13 +287,47 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
   };
 
   /* ---------- নতুন / সম্পন্ন ---------- */
-  const startNew = () => {
-    const hasWork = draft.status !== 'completed' && (draft.info.clientName || totals.anyComplete);
-    if (hasWork && !window.confirm('এই খসড়া মুছে নতুন জরিপ শুরু করবেন?')) return;
+  const beginFreshSurvey = () => {
     clearDraft();
     setErrors({});
     setDraft(newDraft());
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const startNew = () => {
+    const hasWork = !!(draft.info.clientName || totals.anyComplete);
+    // আগেই সেভ করা মাপ — আবার সেভ করবেন নাকি স্কিপ, ডায়ালগে জানতে চাই
+    if (draft.status === 'completed') {
+      if (!hasWork) {
+        beginFreshSurvey();
+        return;
+      }
+      setSaveDialog(true);
+      return;
+    }
+    // কাজ আছে — আগের মাপ নিজে থেকে সংরক্ষিত তালিকায় সেভ করে নতুন জরিপ
+    if (hasWork) {
+      commitCompleted(draft, onSaveSurvey, bookingId);
+      flash('আগের মাপ সংরক্ষিত তালিকায় সেভ হয়েছে — নতুন জরিপ শুরু হচ্ছে');
+      beginFreshSurvey();
+      return;
+    }
+    // কিছুই নেই — শুধু এই ক্ষেত্রে আগের মতো নিশ্চিতকরণ
+    if (!window.confirm('এই খসড়া মুছে নতুন জরিপ শুরু করবেন?')) return;
+    beginFreshSurvey();
+  };
+
+  const skipSaveAndStartNew = () => {
+    setSaveDialog(false);
+    flash('স্কিপ করা হয়েছে — নতুন জরিপ শুরু হচ্ছে');
+    beginFreshSurvey();
+  };
+
+  const saveAgainAndStartNew = () => {
+    setSaveDialog(false);
+    commitCompleted(draft, onSaveSurvey, bookingId);
+    flash('আবার সেভ হয়েছে — নতুন জরিপ শুরু হচ্ছে');
+    beginFreshSurvey();
   };
 
   const complete = () => {
@@ -323,8 +357,42 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
 
   const plotTitle = (i: number) => {
     const dag = draft.plots[i].dagNo.trim() || draft.info.dagNo;
-    return `দাগ ${bn(dag || '—')}${draft.plots.length > 1 ? ` · প্লট ${bn(i + 1)}` : ''}`;
+    const base = dag ? `দাগ ${bn(dag)}` : 'প্লট';
+    return draft.plots.length > 1 ? `${base} · প্লট ${bn(i + 1)}` : base;
   };
+
+  /* ---------- ইতিমধ্যে সেভ আছে — স্কিপ / আবার সেভ ডায়ালগ ---------- */
+  const saveDialogEl = saveDialog ? (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="bahu-save-dialog-title"
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl p-5 space-y-4">
+        <h3 id="bahu-save-dialog-title" className="text-[19px] font-extrabold text-emerald-950">
+          ইতিমধ্যে সেভ আছে
+        </h3>
+        <p className="text-[16px] font-semibold text-slate-700 leading-relaxed">
+          এই মাপটি সংরক্ষিত তালিকায় সেভ করা আছে। আবার সেভ করবেন, নাকি স্কিপ করবেন?
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            onClick={skipSaveAndStartNew}
+            className="min-h-[52px] rounded-2xl border-2 border-emerald-800 text-emerald-900 bg-white text-[16px] font-extrabold"
+          >
+            স্কিপ
+          </button>
+          <button
+            onClick={saveAgainAndStartNew}
+            className="min-h-[52px] rounded-2xl bg-emerald-800 active:bg-emerald-900 text-white text-[16px] font-extrabold shadow-md"
+          >
+            আবার সেভ করুন
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   /* ============================== তথ্য পেজ ============================== */
   if (!draft.infoDone) {
@@ -336,9 +404,9 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
         <div className="rounded-2xl bg-white border border-slate-200 shadow-xs p-4 space-y-4">
           <h3 className="text-lg font-extrabold text-emerald-900">গ্রাহকের তথ্য</h3>
           <Field id="bi-name" label="গ্রাহকের নাম" required value={i.clientName} onChange={(v) => setInfo('clientName', v)} error={errors.clientName} />
-          <Field id="bi-mouza" label="মৌজা" required value={i.mouza} onChange={(v) => setInfo('mouza', v)} error={errors.mouza} />
-          <Field id="bi-dag" label="দাগ নং" required value={i.dagNo} onChange={(v) => setInfo('dagNo', v)} error={errors.dagNo} inputMode="numeric" />
-          <Field id="bi-phone" label="ফোন" value={i.phone} onChange={(v) => setInfo('phone', v)} error={errors.phone} type="tel" inputMode="tel" placeholder="01XXXXXXXXX" />
+          <Field id="bi-mouza" label="মৌজা" value={i.mouza} onChange={(v) => setInfo('mouza', v)} error={errors.mouza} />
+          <Field id="bi-dag" label="দাগ নং" value={i.dagNo} onChange={(v) => setInfo('dagNo', v)} error={errors.dagNo} inputMode="numeric" />
+          <Field id="bi-phone" label="ফোন" required value={i.phone} onChange={(v) => setInfo('phone', v)} error={errors.phone} type="tel" inputMode="tel" placeholder="01XXXXXXXXX" />
           <div className="grid grid-cols-2 gap-3">
             <Field id="bi-jl" label="জে.এল. নং" value={i.jlNo} onChange={(v) => setInfo('jlNo', v)} inputMode="numeric" />
             <Field id="bi-khatian" label="খতিয়ান নং" value={i.khatianNo} onChange={(v) => setInfo('khatianNo', v)} />
@@ -349,6 +417,9 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
           </div>
           <Field id="bi-date" label="তারিখ" type="date" value={i.date} onChange={(v) => setInfo('date', v)} />
         </div>
+        <p className="text-[15px] font-bold text-slate-600 px-1">
+          শুধু নাম ও ফোন নম্বর বাধ্যতামূলক — বাকিগুলো খালি রেখেও পরিমাপ শুরু হবে।
+        </p>
         <button
           id="bahu-info-next"
           onClick={submitInfo}
@@ -357,6 +428,7 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
           পরবর্তী: বাহুর মাপ →
         </button>
         <AutoSaved show={savedTick} />
+        {saveDialogEl}
       </div>
     );
   }
@@ -425,7 +497,13 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
         className="w-full flex items-center gap-2 rounded-xl bg-emerald-50 border border-emerald-200 px-3 min-h-[48px] text-left"
       >
         <span className="flex-1 min-w-0 truncate text-[15px] font-bold text-emerald-950">
-          {draft.info.clientName} · {draft.info.mouza} · দাগ {bn(draft.info.dagNo)}
+          {[
+            draft.info.clientName.trim(),
+            draft.info.mouza.trim(),
+            draft.info.dagNo.trim() ? `দাগ ${bn(draft.info.dagNo.trim())}` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
         <span className="shrink-0 text-sm font-extrabold text-emerald-800">✎ তথ্য</span>
       </button>
@@ -545,6 +623,7 @@ export const SideMeasureWizard: React.FC<Props> = ({ onSaveSurvey, onOpenReport,
           </button>
         )}
       </div>
+      {saveDialogEl}
     </div>
   );
 };

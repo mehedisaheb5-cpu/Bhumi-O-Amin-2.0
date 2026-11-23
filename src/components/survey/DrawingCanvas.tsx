@@ -21,7 +21,38 @@ const COLORS = ['#065f46', '#b45309', '#1d4ed8', '#7e22ce', '#be123c', '#0f766e'
 
 type Menu = { kind: 'len'; id: string } | { kind: 'label'; id: string } | { kind: 'plot'; id: string } | null;
 type Plot = { id: string; pts: { x:number; y:number }[]; sidesFt:(number|undefined)[]; cx:number; cy:number; color:string };
-type Seg = DrawingSegment & { color?: string };
+type Seg = DrawingSegment & { color?: string; dashed?: boolean };
+
+/**
+ * প্রিভিউ ২০, ঠিক ২ — বন্টন: নতুন দাগের প্রান্ত কোনো পুরনো দাগের গায়ে পড়লে
+ * সেই পুরনো দাগটা জোড়ার জায়গায় দুই টুকরোয় ভাগ হয়, যাতে প্রত্যেক টুকরোয়
+ * আলাদা করে মান বসানো যায় আর দুটো প্লটের রিং আলাদা হয়।
+ * পুরনো দাগের মান থাকলে তা জ্যামিতির অনুপাতে দুই টুকরোয় ভাগ হয়।
+ */
+export const splitSegsAt = (segs: Seg[], x: number, y: number, skipIds: Set<string>): Seg[] => {
+  const out: Seg[] = [];
+  let n = 0;
+  for (const s of segs) {
+    if (skipIds.has(s.id)) { out.push(s); continue; }
+    const dx = s.x2 - s.x1, dy = s.y2 - s.y1, l2 = dx * dx + dy * dy;
+    if (l2 === 0) { out.push(s); continue; }
+    const t = ((x - s.x1) * dx + (y - s.y1) * dy) / l2;
+    if (t <= 0.05 || t >= 0.95) { out.push(s); continue; }
+    const px = s.x1 + t * dx, py = s.y1 + t * dy;
+    if (Math.hypot(x - px, y - py) > 2.5) { out.push(s); continue; }
+    const d1 = Math.hypot(px - s.x1, py - s.y1), d2 = Math.hypot(s.x2 - px, s.y2 - py);
+    const total = d1 + d2;
+    let l1 = s.lengthFt, l2ft = s.lengthFt;
+    if (s.lengthFt !== undefined && total > 0) {
+      l1 = Math.round(((s.lengthFt * d1) / total) * 1000) / 1000;
+      l2ft = Math.round((s.lengthFt - l1) * 1000) / 1000;
+    }
+    const base = `seg-${Date.now()}-${n++}`;
+    out.push({ ...s, id: `${base}a`, x2: px, y2: py, lengthFt: l1 });
+    out.push({ ...s, id: `${base}b`, x1: px, y1: py, lengthFt: l2ft });
+  }
+  return out;
+};
 
 const ftIn = (ft?: number): string => {
   if (ft === undefined || ft === null || !isFinite(ft)) return '';
@@ -38,7 +69,7 @@ const toFeet = (f: string, i: string): number | undefined => {
   return Math.max(0, Math.round(v * 1000) / 1000);
 };
 
-export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
+export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: (() => void) | null } }> = ({ lang, printRef }) => {
   const [segments, setSegments] = useState<Seg[]>([]);
   const [restored, setRestored] = useState(false);
   const [redoStack, setRedoStack] = useState<Seg[]>([]);
@@ -57,6 +88,10 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
   const [plotMetas, setPlotMetas] = useState<PlotMeta[]>([]);
   const [plotInput, setPlotInput] = useState('');
   const [dagInput, setDagInput] = useState('');
+  /** প্রিভিউ ২০, ঠিক ৪ — বিভাজক দাগের টুল: 'solid' সোজা, 'dotted' ডটেড; null = সাধারণ আঁকা */
+  const [dividerTool, setDividerTool] = useState<'solid' | 'dotted' | null>(null);
+  /** প্রিভিউ ২০, ঠিক ৪ — রঙের প্যালেট বন্ধ থাকে; রঙের আইকনে ট্যাপ করলে খোলে */
+  const [colorsOpen, setColorsOpen] = useState(false);
   const cardDrag = useRef<{ id:string; sx:number; sy:number; ox:number; oy:number; moved:boolean }|null>(null);
   const resizeDrag = useRef<{ id:string; sx:number; sy:number; sw:number; sh:number }|null>(null);
 
@@ -72,7 +107,15 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
     | { kind: 'moveSeg'; id: string; sx: number; sy: number; pts: [number, number, number, number]; moved: boolean }
     | { kind: 'endpoint'; id: string; end: 1 | 2 }
     | { kind: 'corner'; heads: { id: string; end: 1 | 2 }[]; sx: number; sy: number; ox: number; oy: number; moved: boolean }
+    | { kind: 'plotMove'; plotId: string; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number }[]; moved: boolean }
+    | { kind: 'plotCorner'; plotId: string; corner: { x: number; y: number }; opp: { x: number; y: number }; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; moved: boolean }
   >({ kind: 'none' });
+  /** প্রিভিউ ২০, ঠিক ৭ — হাতে আনলক করা প্লটের রিং id: অটো-লক যেন আবার লক না করে */
+  const unlockedRef = useRef<Set<string>>(new Set());
+  /** প্রিভিউ ২০, ঠিক ২ — বন্টনে হারিয়ে যাওয়া সম্পন্ন রিংয়ের নাম/দাগ বড় টুকরোয় দিতে আগের রিংগুলো */
+  const prevRingsRef = useRef<{ id: string; segIds: string[]; area: number | null; meta: PlotMeta | undefined }[]>([]);
+  const plotMetasRef = useRef<PlotMeta[]>(plotMetas);
+  plotMetasRef.current = plotMetas;
 
   /** walks closed rings — one ring = one plot. Handles shared sides (adjacent plots). Memoized for 60fps */
   const polygonsMemo = useMemo<Plot[]>(() => {
@@ -229,6 +272,73 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
     }
   }, [segments, plotMetas, restored]);
 
+  /* ---------------- প্লট লক + বন্টনে নাম/দাগ (প্রিভিউ ২০, ঠিক ২ ও ৭) ----------------
+     - ৪ বাহুর মান বসলে প্লট নিজে থেকে লক হয় (দাগ নম্বর না থাকলে পরের নম্বর বসে)।
+     - হাতে আনলক করা প্লট আবার লক হয় না — 🔓 চাপলে আবার লক হয়।
+     - বন্টনে সম্পন্ন প্লট ভাগ হলে তার নাম/দাগ/রঙ সবচেয়ে বড় টুকরোয় থাকে। */
+  useEffect(() => {
+    const metas = plotMetasRef.current;
+    const rings = polygonsMemo.map((pl) => ({
+      id: pl.id,
+      segIds: pl.id.split('|'),
+      area: plotArea(pl)?.sqft ?? null,
+      meta: metas.find((m) => m.id === pl.id),
+    }));
+    const prev = prevRingsRef.current;
+    const inherit: Record<string, Partial<PlotMeta>> = {};
+    for (const old of prev) {
+      if (!old.meta?.completed) continue;
+      if (rings.some((r) => r.id === old.id)) continue; // রিংটা এখনো আছে
+      const kids = rings.filter((r) => r.segIds.some((id) => old.segIds.includes(id)));
+      if (!kids.length) continue;
+      kids.sort((a, b) => (b.area ?? 0) - (a.area ?? 0));
+      const big = kids[0];
+      if (!big.meta?.dagNo && !big.meta?.title) {
+        inherit[big.id] = { title: old.meta.title, dagNo: old.meta.dagNo, color: old.meta.color };
+      }
+    }
+    const usedDag = new Set(metas.map((m) => m.dagNo).filter(Boolean));
+    let nextDag = 1;
+    const autoLock: Record<string, Partial<PlotMeta>> = {};
+    for (const r of rings) {
+      const pl = polygonsMemo.find((p) => p.id === r.id);
+      if (!pl) continue;
+      const valued = pl.sidesFt.filter((v): v is number => typeof v === 'number' && v > 0).length;
+      if (valued < 4) continue;
+      if (r.meta?.completed) continue;
+      if (unlockedRef.current.has(r.id)) continue;
+      let dag = inherit[r.id]?.dagNo || r.meta?.dagNo;
+      if (!dag) {
+        while (usedDag.has(String(nextDag))) nextDag++;
+        dag = String(nextDag);
+        usedDag.add(dag);
+        nextDag++;
+      }
+      autoLock[r.id] = { completed: true, dagNo: dag };
+    }
+    let next = metas;
+    if (Object.keys(inherit).length || Object.keys(autoLock).length) {
+      const apply = (id: string, patch: Partial<PlotMeta>) => {
+        const i = next.findIndex((m) => m.id === id);
+        if (i < 0) next = [...next, { id, ...patch }];
+        else {
+          const n = next.slice();
+          n[i] = { ...n[i], ...patch };
+          next = n;
+        }
+      };
+      for (const [id, patch] of Object.entries(inherit)) apply(id, patch);
+      for (const [id, patch] of Object.entries(autoLock)) apply(id, patch);
+      setPlotMetas(next);
+      plotMetasRef.current = next;
+    }
+    prevRingsRef.current = rings.map((r) => ({
+      ...r,
+      meta: next.find((m) => m.id === r.id),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polygonsMemo]);
+
   /* ---------------- canvas size ----------------
      The viewBox height follows the real box so one canvas unit is one square
      unit on both axes: no stretching (which made circles oval and some lines
@@ -248,6 +358,17 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
   }, []);
 
   /* ---------------- coords ---------------- */
+  /* প্রিভিউ ২০, ঠিক ৫ — ক্যানভাসে আঙুল রাখলে পেজ ওপরে-নিচে স্ক্রল হবে না:
+     র‍্যাপারে touch-action:none (ক্লাস) + নন-প্যাসিভ touchmove ব্লক। */
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const stop = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+    el.addEventListener('touchmove', stop, { passive: false });
+    return () => el.removeEventListener('touchmove', stop);
+  }, []);
   /**
    * Screen -> canvas units via the SVG's own screen matrix. This is exact for
    * any box shape and any zoom level, so the line always starts under the finger.
@@ -368,10 +489,6 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
   };
 
   /* ---------------- mutations ---------------- */
-  const addSegment = (s: Omit<Seg, 'id'>) => {
-    setSegments((prev) => [...prev, { ...s, id: `seg-${Date.now()}-${prev.length}` }]);
-    setRedoStack([]);
-  };
   const updateSegment = (id: string, patch: Partial<Seg>) =>
     setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const deleteSegment = (id: string) => {
@@ -434,6 +551,35 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
       `<script>window.onload=async()=>{try{await document.fonts.load('400 12px "Noto Sans Bengali"','ভূমি ও আমিন 0123456789');await document.fonts.load('700 12px "Noto Sans Bengali"','দখল প্রতিবেদন');await document.fonts.ready}catch(e){};setTimeout(()=>window.print(),100)}<\\/script></body></html>`
     );
     w.document.close();
+  };
+
+  /* প্রিভিউ ২০, ঠিক ৪ — প্রিভিউ (👁) বোতাম এখন ওপরে "✓ সম্পন্ন"-এর পাশে (SurveyScreen);
+     সেখান থেকে এই printCanvas-ই চলে — টুলবারে আর 👁 নেই। */
+  useEffect(() => {
+    if (printRef) printRef.current = printCanvas;
+  });
+
+  /* ---------------- প্লট লক টগল (প্রিভিউ ২০, সংযোজন ৭) ---------------- */
+  const toggleLock = (id: string) => {
+    const m = plotMeta(id);
+    if (m.completed) {
+      unlockedRef.current.add(id);
+      setPlotMeta(id, { completed: false });
+      setHint('প্লট আনলক হয়েছে — বাহু সরানো যাবে, মান বদলানো যাবে');
+    } else {
+      unlockedRef.current.delete(id);
+      let dag = m.dagNo;
+      if (!dag) {
+        const used = new Set(plotMetas.map((x) => x.dagNo).filter(Boolean));
+        let n = 1;
+        while (used.has(String(n))) n++;
+        dag = String(n);
+      }
+      setPlotMeta(id, { completed: true, dagNo: dag });
+      setHint('প্লট লক হয়েছে 🔒 — ভেতরে টেনে পুরো প্লট সরবে, কোনা টেনে বড়-ছোট হবে');
+    }
+    window.setTimeout(() => setHint(null), 3000);
+    vibrate();
   };
 
   /* ---------------- plot card (drag = move, tap = edit) ---------------- */
@@ -504,8 +650,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = toWorld(e.clientX, e.clientY);
     // color fill: tapping inside a plot paints it with the active toolbar colour
+    // (বিভাজক টুল চালু থাকলে রঙ নয় — বন্টনের দাগ আঁকা হবে)
     const hit=hitPlotAt(p.x, p.y);
-    if(hit && !plotMeta(hit.id).completed){
+    if(!dividerTool && hit && !plotMeta(hit.id).completed){
       // if user has picked a colour (or just wants to confirm), a tap inside fills the plot
       // we treat any interior tap that is NOT on a card as a fill, when the plot colour differs
       // to avoid stealing line drags, only fill if finger is well inside (not near edge)
@@ -522,6 +669,45 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
     }
     // show exactly where the finger landed (tap feedback)
     setTapDot({ x: p.x, y: p.y, id: Date.now() });
+
+    // লক (সম্পন্ন) প্লট — প্রিভিউ ২০, ঠিক ৭: ভেতরে টানলে পুরো প্লট সরে,
+    // কোনা টানলে বড়-ছোট হয় (বিপরীত কোনাকে কেন্দ্র করে, মান আবার হিসাব হয়)।
+    // বিভাজক টুল চালু থাকলে এই পথ নয় — বন্টনের দাগ আঁকা হবে।
+    if (!dividerTool) {
+      const k = unitsPerPx();
+      const lockedPlot = polygonsMemo.find((pl) => {
+        if (!plotMeta(pl.id).completed) return false;
+        if (pointInPolygon(p.x, p.y, pl.pts)) return true;
+        return pl.pts.some((q) => Math.hypot(p.x - q.x, p.y - q.y) < END_PX * k);
+      });
+      if (lockedPlot) {
+        const cornerPt = lockedPlot.pts.find((q) => Math.hypot(p.x - q.x, p.y - q.y) < END_PX * k);
+        const nearEdge = lockedPlot.pts.some((_, i) => {
+          const a = lockedPlot.pts[i], b = lockedPlot.pts[(i + 1) % lockedPlot.pts.length];
+          const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+          let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2;
+          t = Math.max(0, Math.min(1, t));
+          return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)) < 10;
+        });
+        const orig = lockedPlot.id.split('|')
+          .map((id) => segments.find((s) => s.id === id))
+          .filter((s): s is Seg => !!s)
+          .map((s) => ({ id: s.id, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2, len: s.lengthFt }));
+        if (cornerPt && orig.length) {
+          const idx = lockedPlot.pts.indexOf(cornerPt);
+          const opp = lockedPlot.pts[(idx + 2) % lockedPlot.pts.length];
+          press.current = { kind: 'plotCorner', plotId: lockedPlot.id, corner: cornerPt, opp, sx: e.clientX, sy: e.clientY, orig, moved: false };
+          setSelectedId(null);
+          vibrate();
+          return;
+        }
+        if (!nearEdge && orig.length) {
+          press.current = { kind: 'plotMove', plotId: lockedPlot.id, sx: e.clientX, sy: e.clientY, orig, moved: false };
+          vibrate();
+          return;
+        }
+      }
+    }
 
     // Line body first (30px), endpoint handles second (16px):
     // otherwise the corner zone steals the drag and a line can never be moved
@@ -560,6 +746,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
     }
 
     // if inside a completed (locked) plot, don't create new line inside it
+    // (বিভাজক টুল চালু থাকলে বন্টনের দাগ আঁকা যাবে — সেটাই ঠিক ২)
+    if (!dividerTool) {
     for(const pl of polygonsMemo){
       const m=plotMeta(pl.id);
       if(!m.completed) continue;
@@ -577,6 +765,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
         return;
       }
     }
+    }
     const s = snapCorner(p.x, p.y);
     if (s.snapped) vibrate();
     lastSnapRef.current = s.snapped;
@@ -588,6 +777,54 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
 
   const handleMove = (e: PointerEvent) => {
     const g = press.current;
+    /* প্রিভিউ ২০, ঠিক ৭ — লক প্লট: ভেতরে টানলে পুরো চারবাহুর প্লট একসাথে সরে */
+    if (g.kind === 'plotMove') {
+      if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
+      g.moved = true;
+      const k = unitsPerPx();
+      const dx = (e.clientX - g.sx) * k, dy = (e.clientY - g.sy) * k;
+      const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
+        g.orig.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
+      );
+      setSegments((prev) =>
+        prev.map((sg) => {
+          const o = byId.get(sg.id);
+          if (!o) return sg;
+          return { ...sg, x1: o.x1 + dx, y1: o.y1 + dy, x2: o.x2 + dx, y2: o.y2 + dy };
+        })
+      );
+      return;
+    }
+    /* প্রিভিউ ২০, ঠিক ৭ — লক প্লটের কোনা টানলে বিপরীত কোনাকে কেন্দ্র করে
+       পুরো প্লট বড়-ছোট হয়; বাহুর মান অনুপাতে আবার হিসাব হয় (ক্ষেত্রফল বদলায়)। */
+    if (g.kind === 'plotCorner') {
+      if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
+      g.moved = true;
+      const p = toWorld(e.clientX, e.clientY);
+      const d0 = Math.hypot(g.corner.x - g.opp.x, g.corner.y - g.opp.y) || 1;
+      let s = Math.hypot(p.x - g.opp.x, p.y - g.opp.y) / d0;
+      s = Math.max(0.3, Math.min(3, s));
+      const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
+        g.orig.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
+      );
+      const sc = (q: { x: number; y: number }) => ({
+        x: g.opp.x + (q.x - g.opp.x) * s,
+        y: g.opp.y + (q.y - g.opp.y) * s,
+      });
+      setSegments((prev) =>
+        prev.map((sg) => {
+          const o = byId.get(sg.id);
+          if (!o) return sg;
+          const a = sc({ x: o.x1, y: o.y1 }), b = sc({ x: o.x2, y: o.y2 });
+          return {
+            ...sg,
+            x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+            lengthFt: o.len !== undefined ? Math.round(o.len * s * 1000) / 1000 : undefined,
+          };
+        })
+      );
+      return;
+    }
     if (g.kind === 'moveSeg') {
       const _lk2=completedSegIds();
       if(_lk2.has(g.id)){
@@ -680,17 +917,43 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
         const fixed = g.end === 1 ? { x: seg.x2, y: seg.y2 } : { x: seg.x1, y: seg.y1 };
         const use = resolvePoint(p.x, p.y, { skipIds: new Set([g.id]), angleFrom: fixed });
         updateSegment(g.id, g.end === 1 ? { x1: use.x, y1: use.y } : { x2: use.x, y2: use.y });
+        // প্রান্ত কোনো পুরনো দাগের গায়ে পড়লে সেই দাগটা জোড়ায় ভাগ হয় (বন্টন)
+        setSegments((prev) => splitSegsAt(prev, use.x, use.y, new Set([g.id])));
       }
     }
     if (g.kind === 'create' && draft) {
       if (Math.hypot(draft.x2 - draft.x1, draft.y2 - draft.y1) >= MIN_LEN_PX * unitsPerPx()) {
-        addSegment({ x1: draft.x1, y1: draft.y1, x2: draft.x2, y2: draft.y2, color: activeColor });
+        const ns: Seg = {
+          id: `seg-${Date.now()}-n`,
+          x1: draft.x1, y1: draft.y1, x2: draft.x2, y2: draft.y2,
+          color: activeColor,
+          dashed: dividerTool === 'dotted' ? true : undefined,
+        };
+        setSegments((prev) => {
+          // নতুন দাগের দুই প্রান্ত পুরনো দাগের গায়ে পড়লে সেগুলো জোড়ায় ভাগ হয় (বন্টন)
+          let next = [...prev, ns];
+          next = splitSegsAt(next, ns.x2, ns.y2, new Set([ns.id]));
+          next = splitSegsAt(next, ns.x1, ns.y1, new Set([ns.id]));
+          return next;
+        });
+        setRedoStack([]);
+        if (dividerTool) {
+          setDividerTool(null);
+          setHint('নতুন প্লট তৈরি হয়েছে — বিভাজক দাগের মান বসান, খুঁটির ডট দেখুন');
+          window.setTimeout(() => setHint(null), 3000);
+        }
       }
     }
     // tap on a line (no drag) -> straight into the feet/inch input
+    // (লক প্লটের দাগে ট্যাপ করলে মানের ঘর নয় — আনলকের হিন্ট)
     if (g.kind === 'moveSeg' && !g.moved) {
       const s2 = segments.find((s) => s.id === g.id);
-      if (s2) openLen(s2);
+      if (s2) {
+        if (completedSegIds().has(s2.id)) {
+          setHint('🔒 প্লট লক আছে — মান বদলাতে প্লটের 🔒 আইকনে ট্যাপ করে আনলক করুন');
+          window.setTimeout(() => setHint(null), 3000);
+        } else openLen(s2);
+      }
     }
     press.current = { kind: 'none' };
     lastSnapRef.current = false;
@@ -742,11 +1005,21 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
     updateSegment(id, { lengthFt: ft });
   };
 
+  /* বিভাজক টুল বাছাই — একই টুলে আবার ট্যাপ করলে বন্ধ হয় (টগল) */
+  const pickDividerTool = (t: 'solid' | 'dotted') => {
+    const next = dividerTool === t ? null : t;
+    setDividerTool(next);
+    if (next) {
+      setHint(`${next === 'solid' ? 'সোজা' : 'ডটেড'} দাগ: প্লটের এক কিনারা থেকে আরেক কিনারায় টানুন`);
+      window.setTimeout(() => setHint(null), 3500);
+    } else setHint(null);
+  };
+
   const sel = segments.find((s) => s.id === selectedId) || null;
 
   /* ---------------- render ---------------- */
   return (
-    <div className="relative overflow-visible" ref={wrapperRef} onPointerMove={dragging ? tbMove : undefined} onPointerUp={dragging ? tbUp : undefined} onPointerCancel={dragging ? tbUp : undefined}>
+    <div className="relative overflow-visible touch-none" ref={wrapperRef} style={{ overscrollBehavior: 'none' }} onPointerMove={dragging ? tbMove : undefined} onPointerUp={dragging ? tbUp : undefined} onPointerCancel={dragging ? tbUp : undefined}>
       {/* ---------- small translucent dial ---------- */}
       <div
         ref={toolbarRef}
@@ -769,13 +1042,23 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
               <button onClick={undo} disabled={!segments.length} className="h-7 rounded-lg bg-white/70 text-slate-700 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">↶</span></button>
               <button onClick={redo} disabled={!redoStack.length} className="h-7 rounded-lg bg-white/70 text-slate-700 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">↷</span></button>
               <button onClick={() => { if (sel) deleteSegment(sel.id); }} disabled={!sel} className="h-7 rounded-lg bg-rose-50/80 text-rose-700 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">🗑</span></button>
-              <button onClick={printCanvas} className="h-7 rounded-lg bg-sky-50/80 text-sky-900 flex flex-col items-center justify-center" title="প্রিভিউ / প্রিন্ট"><span className="text-[11px]">👁</span></button>
+              <button
+                onClick={() => setOpen(false)}
+                className="h-7 rounded-lg bg-slate-800/85 text-white flex flex-col items-center justify-center"
+                title="টুলবার বন্ধ করুন"
+                aria-label="টুলবার বন্ধ করুন"
+              ><span className="text-[11px]">✕</span></button>
 
               <button onClick={() => { if (sel) { setLabelInput(sel.label ?? ''); setLabelColor(sel.color || activeColor); setMenu({ kind: 'label', id: sel.id }); } else { setHint('আগে একটা দাগে ট্যাপ করুন, তারপর Aa চাপুন।'); window.setTimeout(() => setHint(null), 3000); } }} className="h-7 rounded-lg bg-sky-50/80 text-sky-900 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">Aa</span></button>
               <button onClick={handleComplete} className="h-7 rounded-lg bg-blue-600 text-white flex flex-col items-center justify-center shadow" title="ড্রয়িং কমপ্লিট ✓"><span className="text-[11px]">✓</span></button>
-              <div className="h-7 rounded-lg flex items-center justify-center bg-white/70">
+              <button
+                onClick={() => setColorsOpen((v) => !v)}
+                className={`h-7 rounded-lg flex items-center justify-center ${colorsOpen ? 'bg-emerald-100 ring-1 ring-emerald-700' : 'bg-white/70'}`}
+                title="রঙ — ট্যাপ করলে রঙের তালিকা খুলবে"
+                aria-label="রঙ"
+              >
                 <span className="w-4 h-4 rounded-full border border-white shadow" style={{ background: activeColor }} />
-              </div>
+              </button>
               <button
                 onClick={() => {
                   if (segments.length && window.confirm('সব দাগ মুছে নতুন করে শুরু করবেন?')) {
@@ -786,8 +1069,31 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
                 className="h-7 rounded-lg bg-white/70 text-slate-500 flex flex-col items-center justify-center"
                 title="সব মুছে ফেলুন"
               ><span className="text-[10px]">⟳</span></button>
+            </div>
 
-              <div className="col-span-4 grid grid-cols-8 gap-0.5 pt-0.5">
+            {/* বিভাজক দাগ — তৈরি প্লটের ওপর টেনে ভাগ করুন (প্রিভিউ ২০, ঠিক ৪) */}
+            <div className="grid grid-cols-2 gap-0.5 pt-0.5 text-[8px] font-semibold leading-none">
+              <button
+                onClick={() => pickDividerTool('solid')}
+                className={`h-9 rounded-lg flex flex-col items-center justify-center gap-0.5 ${dividerTool === 'solid' ? 'bg-emerald-700 text-white shadow' : 'bg-white/70 text-slate-700'}`}
+                title="সোজা দাগ — তৈরি প্লটের এক কিনারা থেকে আরেক কিনারায় টানুন"
+              >
+                <span className="block w-[3px] h-[14px] bg-current rounded-full" />
+                <span>সোজা দাগ</span>
+              </button>
+              <button
+                onClick={() => pickDividerTool('dotted')}
+                className={`h-9 rounded-lg flex flex-col items-center justify-center gap-0.5 ${dividerTool === 'dotted' ? 'bg-emerald-700 text-white shadow' : 'bg-white/70 text-slate-700'}`}
+                title="ডটেড দাগ — তৈরি প্লটের এক কিনারা থেকে আরেক কিনারায় টানুন"
+              >
+                <span className="block w-[3px] h-[14px] border-l-[3px] border-dotted border-current" />
+                <span>ডটেড দাগ</span>
+              </button>
+            </div>
+
+            {/* রঙের তালিকা বন্ধ থাকে; রঙের আইকনে ট্যাপ করলে খোলে */}
+            {colorsOpen && (
+              <div className="grid grid-cols-8 gap-0.5 pt-0.5">
                 {COLORS.map((c) => (
                   <button
                     key={c}
@@ -802,7 +1108,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
                   />
                 ))}
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
@@ -879,6 +1185,16 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
                 strokeDasharray={isDone ? '4 3' : undefined}
                 pointerEvents="none"
               />
+              {/* লক আইকন — ৪ বাহুর মান থাকলে দেখায়; ট্যাপে লক/আনলক (প্রিভিউ ২০, ঠিক ৭) */}
+              {poly.sidesFt.filter((v) => typeof v === 'number' && v > 0).length >= 4 && (
+                <g
+                  onPointerDown={(e) => { e.stopPropagation(); toggleLock(poly.id); }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <circle cx={cardX} cy={cardY - h / 2 - 12} r={10} fill="#ffffff" stroke={isDone ? '#065f46' : '#94a3b8'} strokeWidth={1.2} />
+                  <text x={cardX} y={cardY - h / 2 - 8.5} fontSize={10} textAnchor="middle" pointerEvents="none">{isDone ? '🔒' : '🔓'}</text>
+                </g>
+              )}
               <g onPointerDown={cardDown(poly.id)} onPointerMove={cardMove} onPointerUp={cardUp} style={{cursor:'move'}}>
                 {meta.style!=='plain' && (
                   <rect x={cardX-w/2} y={cardY-h/2} width={w} height={h} rx={5}
@@ -914,7 +1230,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
           <g key={s.id}>
             <line x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2}
               stroke={s.color || '#065f46'}
-              strokeWidth={selectedId === s.id ? 4 : 3} strokeLinecap="round" />
+              strokeWidth={selectedId === s.id ? 4 : 3} strokeLinecap="round"
+              strokeDasharray={s.dashed ? '7 6' : undefined} />
             {s.lengthFt !== undefined && (() => {
               // always horizontal (শোয়া), white pill behind so it reads over grid/lines
               const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
@@ -950,6 +1267,23 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
           </g>
         ))}
 
+        {/* খুঁটি — প্রতিটি জোড়া/কোনায় ডট (প্রিভিউ ২০, ঠিক ২) */}
+        {(() => {
+          const seen = new Set<string>();
+          const dots: { x: number; y: number }[] = [];
+          for (const s of segments) {
+            for (const p of [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }]) {
+              const k = `${Math.round(p.x)},${Math.round(p.y)}`;
+              if (seen.has(k)) continue;
+              seen.add(k);
+              dots.push(p);
+            }
+          }
+          return dots.map((d, i) => (
+            <circle key={`kh-${i}`} cx={d.x} cy={d.y} r={3.5} fill="#065f46" stroke="#ffffff" strokeWidth={1} pointerEvents="none" />
+          ));
+        })()}
+
         {tapDot && (
           <circle key={tapDot.id} cx={tapDot.x} cy={tapDot.y} r="10" fill="none" stroke="#f59e0b" strokeWidth="2" pointerEvents="none" opacity="0">
             <animate attributeName="r" from="4" to="16" dur="0.35s" begin="0s" fill="freeze" />
@@ -959,7 +1293,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language }> = ({ lang }) => {
 
         {draft && (
           <>
-            <line x1={draft.x1} y1={draft.y1} x2={draft.x2} y2={draft.y2} stroke="#065f46" strokeWidth="3" strokeDasharray="4" strokeLinecap="round" />
+            <line x1={draft.x1} y1={draft.y1} x2={draft.x2} y2={draft.y2} stroke="#065f46" strokeWidth="3" strokeDasharray={dividerTool === 'dotted' ? '7 6' : '4'} strokeLinecap="round" />
             {draft.snapped && <circle cx={draft.x2} cy={draft.y2} r="5" fill="none" stroke="#f59e0b" strokeWidth="2" />}
           </>
         )}

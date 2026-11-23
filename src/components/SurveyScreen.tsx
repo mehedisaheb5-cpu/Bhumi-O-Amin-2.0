@@ -133,6 +133,9 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
     initialSurveyId ? 'saved_records' : 'plots_survey'
   );
   const [wizardKey, setWizardKey] = useState(0);
+  /** প্রিভিউ ২০, ঠিক ৪ — প্রিভিউ (👁) বোতাম এখন ওপরে "✓ সম্পন্ন"-এর পাশে;
+     ক্যানভাসের printCanvas এই রেফ দিয়ে চলে। */
+  const printRef = useRef<(() => void) | null>(null);
   const [bahuInfoLine, setBahuInfoLine] = useState<string | null>(null);
 
   /** চিত্র ভিত্তিক ট্যাব খোলার আগে বাহুর নকশা ক্যানভাসে পাঠাই */
@@ -684,6 +687,15 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
               </span>
             </div>
             <button
+              id="drawing-preview"
+              onClick={() => printRef.current?.()}
+              className="shrink-0 h-full w-12 rounded-xl bg-white border-2 border-emerald-800 text-emerald-900 text-[18px] font-extrabold"
+              aria-label="প্রিভিউ"
+              title="প্রিভিউ / প্রিন্ট"
+            >
+              👁
+            </button>
+            <button
               id="drawing-complete"
               onClick={completeFromCanvas}
               className="shrink-0 h-full px-3.5 rounded-xl bg-emerald-800 active:bg-emerald-900 text-white text-[16px] font-extrabold shadow-md"
@@ -698,7 +710,7 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
               </div>
             </div>
           )}
-          <DrawingCanvas lang={lang} />
+          <DrawingCanvas lang={lang} printRef={printRef} />
         </div>
       ) : activeTab === 'gps_survey' ? (
         <>

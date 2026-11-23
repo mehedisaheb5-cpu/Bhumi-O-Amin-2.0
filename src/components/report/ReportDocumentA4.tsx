@@ -148,8 +148,9 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
         const meta=plotMetas.find(m=> m.id===pl.id);
         const sides=pl.sides.filter((v:any)=> typeof v==='number'&&v>0);
         let dec='—';
-        if(sides.length>=4){ const a=pl.sides[0]||0,b=pl.sides[1]||0,c=pl.sides[2]||0,d=pl.sides[3]||0; const sq=((a+c)/2)*((b+d)/2); dec=(sq/435.6).toFixed(2); }
-        return {dag: meta?.dagNo || `${342+idx}`, dec, name: meta?.title || `প্লট ${idx+1}`};
+        let decNum=0;
+        if(sides.length>=4){ const a=pl.sides[0]||0,b=pl.sides[1]||0,c=pl.sides[2]||0,d=pl.sides[3]||0; const sq=((a+c)/2)*((b+d)/2); dec=(sq/435.6).toFixed(2); decNum=sq/435.6; }
+        return {dag: meta?.dagNo || `${342+idx}`, dec, decNum, name: meta?.title || `প্লট ${idx+1}`};
       });
     }
     // D: fallback to occupation 4-sides plots if no drawing segments
@@ -157,12 +158,14 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
       return report.plots.map((p, idx) => ({
         dag: p.dagNo || `${342+idx}`,
         dec: p.decimal !== null ? p.decimal.toFixed(2) : '—',
+        decNum: p.decimal !== null ? p.decimal : 0,
         name: p.plotName || `প্লট ${idx+1}`,
       }));
     }
-    return [{dag: report.dagNo||'—', dec: formatNumberByLang(roundClean(report.decimal,2),lang), name: report.title}];
+    return [{dag: report.dagNo||'—', dec: formatNumberByLang(roundClean(report.decimal,2),lang), decNum: report.decimal || 0, name: report.title}];
   },[plots, plotMetas, report, lang]);
-  const totalDec = useMemo(()=> tafsils.reduce((s,t)=> s + (parseFloat(t.dec)||0),0).toFixed(2),[tafsils]);
+  // মোট = প্রতিটি প্লটের আসল (গোল না করা) শতাংশের যোগফল — গোল করা মান যোগ করলে ৬.৮৮/৬.৮৯ গরমিল হয়
+  const totalDec = useMemo(()=> tafsils.reduce((s,t)=> s + (t.decNum||0),0).toFixed(2),[tafsils]);
 
   const inputStyle: React.CSSProperties = {width:'100%', border:'1px solid #a7f3d0', borderRadius:4, padding:'2px 4px', fontSize:11, background:'rgba(255,255,255,0.9)', MozAppearance:'none' as any, WebkitAppearance:'none' as any, appearance:'none' as any};
 
@@ -297,6 +300,35 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
               <div style={{fontSize:13, fontWeight:900, color:'#b91c1c'}}>{totalDec} শতাংশ</div>
             </div>
           </div>
+          {/* প্লটের হিসাব — একই মালিকের একাধিক প্লট হলে প্রত্যেকটির নাম, দাগ নম্বর ও শতাংশ (প্রিভিউ ২০, ঠিক ২) */}
+          {tafsils.length > 1 && (
+            <div style={{ marginTop: 4, border: '1px solid #14532d', borderRadius: 8, overflow: 'hidden', position: 'relative', zIndex: 1 }}>
+              <div style={{ background: '#14532d', color: 'white', fontSize: 11, fontWeight: 700, padding: '5px 10px' }}>প্লটের হিসাব — একই মালিকের প্লটগুলো</div>
+              <table style={{ width: '100%', fontSize: 11, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f0fdf4' }}>
+                    <th style={{ border: '1px solid #bbf7d0', padding: '4px 8px', textAlign: 'left' }}>প্লটের নাম</th>
+                    <th style={{ border: '1px solid #bbf7d0', padding: '4px 8px', textAlign: 'left' }}>দাগ নম্বর</th>
+                    <th style={{ border: '1px solid #bbf7d0', padding: '4px 8px', textAlign: 'right' }}>শতাংশ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tafsils.map((t, i) => (
+                    <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#f8fafc' }}>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px 8px' }}>{t.name}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px 8px' }}>{t.dag}</td>
+                      <td style={{ border: '1px solid #e2e8f0', padding: '4px 8px', textAlign: 'right', fontWeight: 700 }}>{t.dec} শতাংশ</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: '#f0fdf4', fontWeight: 900 }}>
+                    <td style={{ border: '1px solid #bbf7d0', padding: '4px 8px' }}>মোট</td>
+                    <td style={{ border: '1px solid #bbf7d0', padding: '4px 8px' }}></td>
+                    <td style={{ border: '1px solid #bbf7d0', padding: '4px 8px', textAlign: 'right' }}>{totalDec} শতাংশ</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
           <div style={{marginTop:4, borderTop:'1px solid #14532d', paddingTop:4, display:'flex', justifyContent:'space-between', gap:6, fontSize:9}}>
             <textarea value={footerLeft} onChange={e=> setFooterLeft(e.target.value)} rows={2} style={{flex:1, fontSize:9, lineHeight:1.3, border:'1px solid #cbd5e1', borderRadius:4, padding:4, background:'white', resize:'none', textAlign:'center'}} />
             <textarea value={footerMid} onChange={e=> setFooterMid(e.target.value)} rows={1} style={{flex:1, fontSize:9, border:'1px solid #cbd5e1', borderRadius:4, padding:4, background:'white', resize:'none', textAlign:'center'}} />

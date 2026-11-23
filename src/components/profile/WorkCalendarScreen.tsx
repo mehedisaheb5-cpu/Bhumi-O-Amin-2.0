@@ -35,7 +35,10 @@ import {
   getAllBookings,
   hasEveningReminder,
   hasHourReminder,
+  isBookableDate,
+  isTodayBookable,
   isValidPhone,
+  isWithinWorkingHours,
   newBookingId,
   nextBooking,
   reminderText,
@@ -159,6 +162,10 @@ function toForm(b: WorkBooking): FormState {
 
 export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const today = todayStr();
+  /** আজ বিকেল ৪টার পর হলে আজ আর বুকিং দেওয়া যাবে না */
+  const todayBookable = isTodayBookable();
+  /** নতুন বুকিংয়ের শুরুর তারিখ — আজ বুকিংযোগ্য না হলে আগামীকাল */
+  const newBookingDate = (d: string): string => (isBookableDate(d) ? d : addDaysStr(today, 1));
   const [bookings, setBookings] = useState<WorkBooking[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [view, setView] = useState<View>('week');
@@ -209,6 +216,11 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
   const stripRef = useRef<HTMLDivElement | null>(null);
 
   const pickDate = (d: string) => {
+    // বিকেল ৪টার পর আজ আর বুকিংয়ের জন্য বাছাই করা যাবে না — শুধু দেখা যাবে
+    if (d === today && !todayBookable) {
+      showToast('আজকের সময় শেষ (কাজের সময় সকাল ৯টা–বিকেল ৪টা)। আগামীকাল থেকে বুকিং করুন।');
+      return;
+    }
     setSel(d);
     setWk(weekStartStr(d));
     setYm(d.slice(0, 7));
@@ -258,6 +270,17 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
     if (!isValidPhone(f.phone)) return showToast('মোবাইল নম্বর 01 দিয়ে ১১ সংখ্যার হতে হবে');
     if (!f.place.trim()) return showToast('জায়গা দিন');
     if (!f.date || !f.time) return showToast('তারিখ ও সময় দিন');
+    // সম্পাদনায় নিজের পুরোনো তারিখ/সময় রাখতে দিতে হবে — শুধু বদলানো হলে যাচাই হবে
+    const orig = f.id ? bookings.find((b) => b.id === f.id) : undefined;
+    const dateChanged = !orig || orig.date !== f.date;
+    const timeChanged = !orig || orig.time !== f.time;
+    if (dateChanged) {
+      if (f.date < today) return showToast('গত তারিখে বুকিং দেওয়া যাবে না');
+      if (f.date === today && !isTodayBookable())
+        return showToast('আজকের সময় শেষ (কাজের সময় সকাল ৯টা–বিকেল ৪টা)। আগামীকাল থেকে বুকিং করুন।');
+    }
+    if (timeChanged && !isWithinWorkingHours(f.time))
+      return showToast('সময় সকাল ৯টা থেকে বিকেল ৪টার মধ্যে হতে হবে');
     const cand: WorkBooking = {
       id: f.id || newBookingId(),
       date: f.date,
@@ -360,7 +383,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
           </button>
           <h1 className="flex-1 text-xl font-extrabold text-white">কাজের শিডিউল</h1>
           <button
-            onClick={() => setForm(emptyForm(sel))}
+            onClick={() => setForm(emptyForm(newBookingDate(sel)))}
             aria-label="নতুন বুকিং"
             className="w-12 h-12 shrink-0 rounded-2xl bg-[#fde68a] text-[#422006] flex items-center justify-center active:scale-95 transition"
           >
@@ -479,18 +502,21 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
                     key={d}
                     data-day={d}
                     onClick={() => pickDate(d)}
+                    aria-disabled={d === today && !todayBookable}
                     className={`shrink-0 w-[54px] snap-center rounded-2xl py-2 px-0.5 text-center min-h-[64px] active:scale-95 transition ${
                       d === sel
                         ? 'bg-[#065f46] text-white'
-                        : d === today
-                          ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                          : 'bg-white border border-slate-200'
+                        : d === today && !todayBookable
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 opacity-70'
+                          : d === today
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : 'bg-white border border-slate-200'
                     }`}
                   >
                     <small className="block text-[12px] font-normal">{WEEKDAYS[(dd.getDay() + 1) % 7]}</small>
                     <b className="block text-lg font-bold leading-tight">{toBnDigits(dd.getDate())}</b>
                     {c > 0 && (
-                      <i className={`block text-[11px] font-bold not-italic ${d === sel ? 'text-[#fde68a]' : 'text-[#065f46]'}`}>
+                      <i className={`block text-[11px] font-bold not-italic ${d === sel ? 'text-[#fde68a]' : d === today && !todayBookable ? 'text-slate-400' : 'text-[#065f46]'}`}>
                         {toBnDigits(c)}টি
                       </i>
                     )}
@@ -506,7 +532,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
               <ChevronRight className="w-6 h-6" />
             </button>
           </div>
-          <DayList dateStr={sel} today={today} list={selList} onOpen={setDetail} onNew={() => setForm(emptyForm(sel))} />
+          <DayList dateStr={sel} today={today} list={selList} onOpen={setDetail} onNew={() => setForm(emptyForm(newBookingDate(sel)))} />
         </>
       )}
 
@@ -588,15 +614,22 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
                   <button
                     key={c.d}
                     onClick={() => pickDate(c.d as string)}
+                    aria-disabled={c.d === today && !todayBookable}
                     className={`min-h-[48px] rounded-xl text-[16px] font-extrabold relative active:scale-95 transition ${
-                      c.d === sel ? 'bg-[#065f46] text-white' : c.d === today ? 'bg-amber-100 text-amber-900' : 'text-slate-800'
+                      c.d === sel
+                        ? 'bg-[#065f46] text-white'
+                        : c.d === today && !todayBookable
+                          ? 'bg-slate-100 text-slate-400 opacity-70'
+                          : c.d === today
+                            ? 'bg-amber-100 text-amber-900'
+                            : 'text-slate-800'
                     }`}
                   >
                     {toBnDigits(parseDate(c.d).getDate())}
                     {c.n > 0 && (
                       <span
                         className={`absolute bottom-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full ${
-                          c.d === sel ? 'bg-[#fde68a]' : 'bg-[#065f46]'
+                          c.d === sel ? 'bg-[#fde68a]' : c.d === today && !todayBookable ? 'bg-slate-400' : 'bg-[#065f46]'
                         }`}
                       />
                     )}
@@ -607,13 +640,13 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
               )}
             </div>
           </div>
-          <DayList dateStr={sel} today={today} list={selList} onOpen={setDetail} onNew={() => setForm(emptyForm(sel))} />
+          <DayList dateStr={sel} today={today} list={selList} onOpen={setDetail} onNew={() => setForm(emptyForm(newBookingDate(sel)))} />
         </div>
       )}
 
       {/* বড় সোনালি বোতাম */}
       <button
-        onClick={() => setForm(emptyForm(sel))}
+        onClick={() => setForm(emptyForm(newBookingDate(sel)))}
         className="w-full min-h-[58px] rounded-[18px] bg-gradient-to-r from-[#fde68a] to-[#f59e0b] text-[#422006] text-[17px] font-extrabold flex items-center justify-center gap-2 active:scale-[.98] transition"
       >
         <Plus className="w-6 h-6" /> নতুন বুকিং
@@ -890,6 +923,12 @@ function BookingForm({
 }) {
   const [f, setF] = useState<FormState>(initial);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((p) => ({ ...p, [k]: v }));
+  /** ফরমে বুকিংয়ের প্রথম তারিখ — বিকেল ৪টার পর আজ নয়, আগামীকাল;
+   * সম্পাদনায় নিজের পুরোনো তারিখ রাখতে দিতে হবে */
+  const minDate = (() => {
+    const bookableFrom = isTodayBookable() ? todayStr() : addDaysStr(todayStr(), 1);
+    return initial.id && initial.date < bookableFrom ? initial.date : bookableFrom;
+  })();
   return (
     <div className="space-y-1">
       <div className="grid grid-cols-2 gap-2">
@@ -898,6 +937,7 @@ function BookingForm({
           <input
             type="date"
             value={f.date}
+            min={minDate}
             onChange={(e) => set('date', e.target.value)}
             className="block w-full min-h-[52px] border-2 border-slate-200 rounded-xl px-3 text-[16px] mt-1 focus:outline-none focus:border-[#065f46]"
           />
@@ -907,6 +947,8 @@ function BookingForm({
           <input
             type="time"
             value={f.time}
+            min="09:00"
+            max="16:00"
             onChange={(e) => set('time', e.target.value)}
             className="block w-full min-h-[52px] border-2 border-slate-200 rounded-xl px-3 text-[16px] mt-1 focus:outline-none focus:border-[#065f46]"
           />
@@ -957,6 +999,8 @@ function BookingForm({
       <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-2xl p-3 mt-3">
         <Clock className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
         <p className="text-sm font-semibold text-amber-900">
+          কাজের সময় সকাল ৯টা–বিকেল ৪টা। বিকেল ৪টার পর আজকের তারিখে বুকিং দেওয়া যাবে না।
+          <br />
           একই দিনে ৯০ মিনিটের মধ্যে আরেকটি বুকিং থাকলে সতর্ক করা হবে।
         </p>
       </div>
