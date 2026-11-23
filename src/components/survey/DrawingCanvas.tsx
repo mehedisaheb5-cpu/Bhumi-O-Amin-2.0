@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, PointerEvent } from 'react';
 import { DrawingSegment, Language, PlotMeta } from '../../types';
+import { findPlotRings, layoutSideLabels, LabelItem } from '../../lib/plotRings';
 import notoBengaliFontUrl from '../../assets/fonts/NotoSansBengali-Bengali.woff2?url';
 import notoLatinFontUrl from '../../assets/fonts/NotoSansBengali-Latin.woff2?url';
 
@@ -117,87 +118,48 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   const plotMetasRef = useRef<PlotMeta[]>(plotMetas);
   plotMetasRef.current = plotMetas;
 
-  /** walks closed rings — one ring = one plot. Handles shared sides (adjacent plots). Memoized for 60fps */
+  /** walks closed rings — one ring = one plot. Handles shared sides (adjacent plots).
+      বাহু ভাগ হলে (বন্টন) রিংয়ে ৫–৬টা দাগ হয় — findPlotRings সেগুলো এক বাহুতে
+      জোড়ে; নিচের প্লটের মতো বাহু টুকরো-টুকরো প্লটও ধরা পড়ে। Memoized for 60fps */
   const polygonsMemo = useMemo<Plot[]>(() => {
+    const rings = findPlotRings(segments);
+    if (rings.length) {
+      return rings.map((r) => ({ id: r.id, pts: r.pts, sidesFt: r.sidesFt, cx: r.cx, cy: r.cy, color: r.color }));
+    }
+    // fallback: greedy walk for irregular plots when no quad found at all
     const key = (p:{x:number;y:number})=>`${Math.round(p.x)},${Math.round(p.y)}`;
-    const seen=new Set<string>();
     const out: Plot[]=[];
     const adj=new Map<string,Seg[]>();
     for(const sg of segments){ for(const pt of [{x:sg.x1,y:sg.y1},{x:sg.x2,y:sg.y2}]){ const k=key(pt); const a=adj.get(k)||[]; a.push(sg); adj.set(k,a);} }
-    // try every segment as start, both directions, DFS up to 4 edges (quadrilateral plots)
+    const seen2=new Set<string>();
     for(const start of segments){
-      for(const dir of [0,1] as const){
-        const startPt = dir===0 ? {x:start.x1,y:start.y1} : {x:start.x2,y:start.y2};
-        const firstPt = dir===0 ? {x:start.x2,y:start.y2} : {x:start.x1,y:start.y1};
-        const startKey=key(startPt);
-        const dfs=(curKey:string, prev:Seg, segIds:string[], sides:(number|undefined)[], pts:{x:number;y:number}[])=>{
-          if(segIds.length===4){
-            if(curKey===startKey){
-              const pid=segIds.slice().sort().join('|');
-              if(seen.has(pid)) return;
-              seen.add(pid);
-              const uniq=pts.slice(0,4);
-              const cx=uniq.reduce((a,q)=>a+q.x,0)/uniq.length;
-              const cy=uniq.reduce((a,q)=>a+q.y,0)/uniq.length;
-              out.push({ id:pid, pts: uniq, sidesFt: sides.slice(), cx, cy, color: start.color||'#065f46' });
-            }
-            return;
-          }
-          if(segIds.length>4) return;
-          const candList=adj.get(curKey)||[];
-          for(const nxt of candList){
-            if(nxt===prev) continue;
-            if(segIds.includes(nxt.id)) continue;
-            const a=key({x:nxt.x1,y:nxt.y1}), b=key({x:nxt.x2,y:nxt.y2});
-            if(a!==curKey && b!==curKey) continue;
-            const to=a===curKey? b: a;
-            const apt=a===curKey? {x:nxt.x2,y:nxt.y2}:{x:nxt.x1,y:nxt.y1};
-            // prune: if closing early with too few edges, skip
-            if(to===startKey && segIds.length!==3) continue;
-            if(to!==startKey && segIds.length===3) {
-              // last step must close, so if nxt doesn't close, skip
-              // allow only if this nxt would close on next step? Actually we need 4 edges, so at segIds 3, nxt is 4th, must close
-              if(to!==startKey) continue;
-            }
-            dfs(to, nxt, [...segIds, nxt.id], [...sides, nxt.lengthFt], [...pts, apt]);
-          }
-        };
-        dfs(key(firstPt), start, [start.id], [start.lengthFt], [startPt, firstPt]);
+      const pts:{x:number;y:number}[]=[{x:start.x1,y:start.y1}];
+      const sides:(number|undefined)[]=[start.lengthFt];
+      const segIds:string[]=[start.id];
+      const startKey=key({x:start.x1,y:start.y1});
+      let curKey=key({x:start.x2,y:start.y2});
+      let prev:Seg=start;
+      const usedInWalk=new Set<string>([start.id]);
+      pts.push({x:start.x2,y:start.y2});
+      let closed=false;
+      for(let g=0; g<80; g++){
+        if(curKey===startKey){ closed=true; break; }
+        const nxt=(adj.get(curKey)||[]).find(sg=> sg!==prev && !usedInWalk.has(sg.id));
+        if(!nxt) break;
+        const a=key({x:nxt.x1,y:nxt.y1}), b=key({x:nxt.x2,y:nxt.y2});
+        const to=a===curKey?b:a;
+        const apt=a===curKey?{x:nxt.x2,y:nxt.y2}:{x:nxt.x1,y:nxt.y1};
+        segIds.push(nxt.id); sides.push(nxt.lengthFt); usedInWalk.add(nxt.id); prev=nxt; curKey=to;
+        if(curKey===startKey){ closed=true; break; }
+        pts.push(apt);
       }
-    }
-    // also allow plots that were drawn with extra colinear splits (5-6 edges) – keep those too if no 4-cycle found
-    if(out.length===0){
-      // fallback: try up to 6 edges with greedy (for irregular plots)
-      const seen2=new Set<string>();
-      for(const start of segments){
-        const pts:{x:number;y:number}[]=[{x:start.x1,y:start.y1}];
-        const sides:(number|undefined)[]=[start.lengthFt];
-        const segIds:string[]=[start.id];
-        const startKey=key({x:start.x1,y:start.y1});
-        let curKey=key({x:start.x2,y:start.y2});
-        let prev:Seg=start;
-        const usedInWalk=new Set<string>([start.id]);
-        pts.push({x:start.x2,y:start.y2});
-        let closed=false;
-        for(let g=0; g<80; g++){
-          if(curKey===startKey){ closed=true; break; }
-          const nxt=(adj.get(curKey)||[]).find(sg=> sg!==prev && !usedInWalk.has(sg.id));
-          if(!nxt) break;
-          const a=key({x:nxt.x1,y:nxt.y1}), b=key({x:nxt.x2,y:nxt.y2});
-          const to=a===curKey?b:a;
-          const apt=a===curKey?{x:nxt.x2,y:nxt.y2}:{x:nxt.x1,y:nxt.y1};
-          segIds.push(nxt.id); sides.push(nxt.lengthFt); usedInWalk.add(nxt.id); prev=nxt; curKey=to;
-          if(curKey===startKey){ closed=true; break; }
-          pts.push(apt);
-        }
-        if(!closed || pts.length<4) continue;
-        const pid=segIds.slice().sort().join('|');
-        if(seen2.has(pid)) continue;
-        seen2.add(pid);
-        const cx=pts.reduce((a,q)=>a+q.x,0)/pts.length;
-        const cy=pts.reduce((a,q)=>a+q.y,0)/pts.length;
-        out.push({ id:pid, pts, sidesFt:sides, cx, cy, color:start.color||'#065f46' });
-      }
+      if(!closed || pts.length<4) continue;
+      const pid=segIds.slice().sort().join('|');
+      if(seen2.has(pid)) continue;
+      seen2.add(pid);
+      const cx=pts.reduce((a,q)=>a+q.x,0)/pts.length;
+      const cy=pts.reduce((a,q)=>a+q.y,0)/pts.length;
+      out.push({ id:pid, pts, sidesFt:sides, cx, cy, color:start.color||'#065f46' });
     }
     return out;
   }, [segments]);
@@ -491,8 +453,19 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   /* ---------------- mutations ---------------- */
   const updateSegment = (id: string, patch: Partial<Seg>) =>
     setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  /* একটা দাগ মুছুন — লক প্লটের দাগ হলে আনলকের হিন্ট (মান বদলানোর মতোই);
+     কনফার্ম করে মুছলে ↷ দিয়ে ফেরানো যায়; প্লটের হিসাব নিজে থেকে বদলায়। */
   const deleteSegment = (id: string) => {
+    const seg = segments.find((s) => s.id === id);
+    if (!seg) return;
+    if (completedSegIds().has(id)) {
+      setHint('🔒 প্লট লক আছে — মান বদলাতে প্লটের 🔒 আইকনে ট্যাপ করে আনলক করুন');
+      window.setTimeout(() => setHint(null), 3000);
+      return;
+    }
+    if (!window.confirm('এই দাগটা মুছবেন? শুধু এই দাগটাই মুছবে।')) return;
     setSegments((prev) => prev.filter((s) => s.id !== id));
+    setRedoStack((prev) => [...prev, seg]);
     setSelectedId((cur) => (cur === id ? null : cur));
     setMenu(null);
   };
@@ -1017,6 +990,30 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
 
   const sel = segments.find((s) => s.id === selectedId) || null;
 
+  /* বাহুর মানের লেবেলের জায়গা — সরু প্লটে দুটো লেবেল জড়িয়ে যায় বলে
+     layoutSideLabels দিয়ে জায়গা ঠিক করা হয় (উল্টো পাশে / সরিয়ে)। */
+  const labelPos = useMemo(() => {
+    const items: LabelItem[] = [];
+    for (const s of segments) {
+      const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len;
+      const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
+      if (s.lengthFt !== undefined) {
+        const txt = ftIn(s.lengthFt);
+        items.push({ id: `len:${s.id}`, mx, my, ox: (-dy / len) * 11, oy: (dx / len) * 11, ux, uy, tw: txt.length * 6 + 12, th: 13 });
+      }
+      if (s.label) {
+        items.push({ id: `txt:${s.id}`, mx, my, ox: (dy / len) * 13, oy: (-dx / len) * 13, ux, uy, tw: s.label.length * 6 + 12, th: 13 });
+      }
+    }
+    return layoutSideLabels(items, { w: W, h: viewH });
+  }, [segments, viewH]);
+
+  /* মোট শতক — হিসাব আছে এমন সব প্লটের যোগফল, মান বদলালে নিজে থেকে বদলায় */
+  const totalAreas = polygonsMemo.map((pl) => plotArea(pl)).filter((a): a is NonNullable<ReturnType<typeof plotArea>> => !!a);
+  const totalDecimal = totalAreas.reduce((s, a) => s + a.decimal, 0);
+
   /* ---------------- render ---------------- */
   return (
     <div className="relative overflow-visible touch-none" ref={wrapperRef} style={{ overscrollBehavior: 'none' }} onPointerMove={dragging ? tbMove : undefined} onPointerUp={dragging ? tbUp : undefined} onPointerCancel={dragging ? tbUp : undefined}>
@@ -1234,12 +1231,12 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
               strokeDasharray={s.dashed ? '7 6' : undefined} />
             {s.lengthFt !== undefined && (() => {
               // always horizontal (শোয়া), white pill behind so it reads over grid/lines
-              const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
-              const len = Math.hypot(dx, dy) || 1;
-              const ox = (-dy / len) * 11, oy = (dx / len) * 11;
+              // জায়গা layoutSideLabels থেকে — সরু প্লটে জড়ায় না
               const txt= ftIn(s.lengthFt);
               const tw= txt.length*6+12, th=13;
-              const cx=(s.x1 + s.x2) / 2 + ox, cy=(s.y1 + s.y2) / 2 + oy;
+              const lp = labelPos.get(`len:${s.id}`);
+              const cx = lp ? lp.cx : (s.x1 + s.x2) / 2;
+              const cy = lp ? lp.cy : (s.y1 + s.y2) / 2;
               return (
                 <g pointerEvents="none">
                   <rect x={cx - tw/2} y={cy - th/2 + 1} width={tw} height={th} rx={6}
@@ -1250,11 +1247,10 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
               );
             })()}
             {s.label && (() => {
-              const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
-              const len = Math.hypot(dx, dy) || 1;
-              const ox = (dy / len) * 13, oy = (-dx / len) * 13;
               const tw= s.label.length*6+12, th=13;
-              const cx=(s.x1 + s.x2) / 2 + ox, cy=(s.y1 + s.y2) / 2 + oy;
+              const lp = labelPos.get(`txt:${s.id}`);
+              const cx = lp ? lp.cx : (s.x1 + s.x2) / 2;
+              const cy = lp ? lp.cy : (s.y1 + s.y2) / 2;
               return (
                 <g pointerEvents="none">
                   <rect x={cx - tw/2} y={cy - th/2 + 1} width={tw} height={th} rx={6}
@@ -1299,6 +1295,14 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         )}
       </svg>
 
+      {/* ---------- মোট শতক — সব প্লটের যোগফল, মান বদলালে নিজে থেকে বদলায় ---------- */}
+      {totalAreas.length > 0 && (
+        <div className="mt-1 rounded-lg bg-emerald-900 text-white px-3 py-1.5 flex items-center justify-between shadow">
+          <span className="text-[13px] font-semibold">মোট {totalAreas.length}টি প্লট</span>
+          <span className="text-[16px] font-bold">{totalDecimal.toFixed(2)} শতক</span>
+        </div>
+      )}
+
       {/* ---------- feet / inch input: tiny, translucent, saves as you type ---------- */}
       {menu?.kind === 'len' && sel && (
         <div className="absolute right-1 top-1 z-30 rounded-lg bg-white/70 backdrop-blur border border-slate-300/80 shadow px-1 py-0.5"
@@ -1323,6 +1327,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
               className="w-10 h-7 rounded border border-slate-300/80 bg-white/80 px-0.5 text-center text-[12px]"
             />
             <span className="text-[9px] text-slate-500">″</span>
+            <button onClick={() => deleteSegment(sel.id)} className="h-7 px-2 rounded bg-rose-50 text-rose-700 text-[11px] font-bold" title="শুধু এই দাগটা মুছুন">🗑 মুছুন</button>
             <button onClick={() => setMenu(null)} className="w-6 h-7 rounded text-[11px] font-bold text-slate-500">✕</button>
           </div>
         </div>

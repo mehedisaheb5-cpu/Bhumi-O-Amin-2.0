@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { SurveyReportRecord, Language, SurveyDrawing, PlotMeta } from '../../types';
 import { formatNumberByLang, roundClean } from '../../lib/land-units';
+import { findPlotRings } from '../../lib/plotRings';
 import { printWithNoto } from '../../lib/print-utils';
 import { reportDrawingFor } from '../../lib/bahuDraftStore';
 import { ResizableFigure, FigureXform, loadFigureXform, saveFigureXform, clearFigureXform } from './ResizableFigure';
@@ -66,23 +67,8 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
   const plots = useMemo(()=>{
     const segs=(drawing?.segments||[]) as any[];
     if(!segs.length) return [];
-    const key=(p:any)=>`${Math.round(p.x)},${Math.round(p.y)}`;
-    const seen=new Set<string>(); const out:any[]=[]; const adj=new Map<string,any[]>();
-    for(const sg of segs) for(const pt of [{x:sg.x1,y:sg.y1},{x:sg.x2,y:sg.y2}]){const k=key(pt); const a=adj.get(k)||[]; a.push(sg); adj.set(k,a);}
-    for(const start of segs){
-      for(const dir of [0,1] as const){
-        const sp=dir===0?{x:start.x1,y:start.y1}:{x:start.x2,y:start.y2};
-        const fp=dir===0?{x:start.x2,y:start.y2}:{x:start.x1,y:start.y1};
-        const sk=key(sp);
-        const dfs=(ck:string, prev:any, ids:string[], sides:any[], pts:any[])=>{
-          if(ids.length===4){ if(ck===sk){ const pid=ids.slice().sort().join('|'); if(seen.has(pid)) return; seen.add(pid); const uniq=pts.slice(0,4); const cx=uniq.reduce((a:number,q:any)=>a+q.x,0)/uniq.length; const cy=uniq.reduce((a:number,q:any)=>a+q.y,0)/uniq.length; out.push({id:pid, pts:uniq, sides, cx, cy}); } return; }
-          if(ids.length>4) return;
-          for(const nxt of (adj.get(ck)||[])){ if(nxt===prev) continue; if(ids.includes(nxt.id)) continue; const a=key({x:nxt.x1,y:nxt.y1}), b=key({x:nxt.x2,y:nxt.y2}); if(a!==ck&&b!==ck) continue; const to=a===ck?b:a; const apt=a===ck?{x:nxt.x2,y:nxt.y2}:{x:nxt.x1,y:nxt.y1}; if(to===sk && ids.length!==3) continue; if(to!==sk && ids.length===3) continue; dfs(to,nxt,[...ids,nxt.id],[...sides,nxt.lengthFt],[...pts,apt]);}
-        };
-        dfs(key(fp), start, [start.id], [start.lengthFt], [sp,fp]);
-      }
-    }
-    return out;
+    // ক্যানভাসের মতোই রিং খোঁজা — বাহু ভাগ হলে (বন্টন) নিচের প্লটও ধরা পড়ে
+    return findPlotRings(segs).map((r)=>({ id:r.id, pts:r.pts, sides:r.sidesFt, cx:r.cx, cy:r.cy }));
   },[drawing]);
 
   // লেখার মাপ নকশার আকারের অনুপাতে — বড়/ছোট নকশায় একই রকম পড়া যায়
