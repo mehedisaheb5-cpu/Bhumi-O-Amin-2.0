@@ -6,10 +6,12 @@ import notoLatinFontUrl from '../../assets/fonts/NotoSansBengali-Latin.woff2?url
 
 /* ---------- fixed canvas ---------- */
 const W = 400;            // logical width; height is derived from the real box so 1 unit is square
-const CORNER_PX = 20;     // screen px: exact corner-to-corner join (tight, so it never "jumps far")
-const EDGE_PX = 12;       // screen px: landing on the body of an existing line
+// ম্যাগনেটিক স্ন্যাপের সহনশীলতা (২৪ নভেম্বর Founder: কাছাকাছি গেলে মিলতে কষ্ট হতো,
+// আটকে যেত — তাই কোনা/কিনারার ধরা-ছোঁয়ার জায়গা বড় করা হলো)
+const CORNER_PX = 30;     // screen px: exact corner-to-corner join (was 20)
+const EDGE_PX = 18;       // screen px: landing on the body of an existing line (was 12)
 const HIT_PX = 18;        // screen px around a line that counts as "tapped the line" (was 30: it stole presses inside a plot)
-const END_PX = 16;        // screen px around an endpoint handle
+const END_PX = 22;        // screen px around an endpoint handle (was 16)
 const HANDLE_R = 6;       // endpoint dot radius (canvas units) — small so it hides nothing
 const MIN_LEN_PX = 16;    // shorter than this is a tap, not a new line
 const MIN_MOVE = 9;       // screen px before a press becomes a drag
@@ -357,8 +359,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   };
 
   /* ---------------- snapping ---------------- */
-  const snapCorner = (x: number, y: number, skipIds?: Set<string>) => {
-    let best = { x, y, snapped: false, dist: CORNER_PX * unitsPerPx() };
+  const snapCorner = (x: number, y: number, skipIds?: Set<string>, radiusPx: number = CORNER_PX) => {
+    let best = { x, y, snapped: false, dist: radiusPx * unitsPerPx() };
     for (const s of segments) {
       if (skipIds?.has(s.id)) continue;
       for (const p of [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }]) {
@@ -401,6 +403,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
    * ONE magnet order everywhere: head (corner) -> body/head of an edge -> 45°.
    * The 45° magnet used to run BEFORE the join, which is why a line dragged
    * towards a neighbouring head slid past it and crossed the other line.
+   * ২৪ নভেম্বর Founder: ৪৫° ম্যাগনেট কোনার সাথে লড়াই করে মিলতে দিত না —
+   * তাই ৪৫° লাগতে যাচ্ছে, অথচ কাছাকাছি কোনো কোনা থাকলে কোনাকেই প্রাধান্য দেওয়া হয়।
    */
   const resolvePoint = (
     x: number,
@@ -413,7 +417,13 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     if (join.snapped) return join;
     if (opts?.angleFrom) {
       const a = snapAngle(opts.angleFrom, { x, y });
-      if (a.snapped) return a;
+      if (a.snapped) {
+        // ৪৫° ম্যাগনেট লাগতে যাচ্ছে — কিন্তু কাছাকাছি (২ গুণ সহনশীলতার ভেতর)
+        // কোনো কোনা থাকলে কোনায় বসবে, ম্যাগনেটের রেখায় আটকে থাকবে না
+        const near = snapCorner(x, y, opts?.skipIds, CORNER_PX * 2);
+        if (near.snapped) return near;
+        return a;
+      }
     }
     return { x, y, snapped: false };
   };
@@ -549,7 +559,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         dag = String(n);
       }
       setPlotMeta(id, { completed: true, dagNo: dag });
-      setHint('প্লট লক হয়েছে 🔒 — ভেতরে টেনে পুরো প্লট সরবে, কোনা টেনে বড়-ছোট হবে');
+      setHint('প্লট লক হয়েছে 🔒 — ভেতরে টেনে পুরো প্লট সরবে, কোনা টেনে ছবি বড়-ছোট হবে (মাপ বদলাবে না)');
     }
     window.setTimeout(() => setHint(null), 3000);
     vibrate();
@@ -644,7 +654,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     setTapDot({ x: p.x, y: p.y, id: Date.now() });
 
     // লক (সম্পন্ন) প্লট — প্রিভিউ ২০, ঠিক ৭: ভেতরে টানলে পুরো প্লট সরে,
-    // কোনা টানলে বড়-ছোট হয় (বিপরীত কোনাকে কেন্দ্র করে, মান আবার হিসাব হয়)।
+    // কোনা টানলে ছবি বড়-ছোট হয় (বিপরীত কোনাকে কেন্দ্র করে) — মান বদলায় না।
     // বিভাজক টুল চালু থাকলে এই পথ নয় — বন্টনের দাগ আঁকা হবে।
     if (!dividerTool) {
       const k = unitsPerPx();
@@ -769,7 +779,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       return;
     }
     /* প্রিভিউ ২০, ঠিক ৭ — লক প্লটের কোনা টানলে বিপরীত কোনাকে কেন্দ্র করে
-       পুরো প্লট বড়-ছোট হয়; বাহুর মান অনুপাতে আবার হিসাব হয় (ক্ষেত্রফল বদলায়)। */
+       পুরো প্লটের ছবি বড়-ছোট হয়; বাহুর মান/ক্ষেত্রফল যেমন ছিল তেমনই থাকে —
+       ২৪ নভেম্বর Founder: "মাপ পরিবর্তন হবেনা। ওটা যেভাবে আছে ওভাবে থাকবে।" */
     if (g.kind === 'plotCorner') {
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
       g.moved = true;
@@ -789,11 +800,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
           const o = byId.get(sg.id);
           if (!o) return sg;
           const a = sc({ x: o.x1, y: o.y1 }), b = sc({ x: o.x2, y: o.y2 });
-          return {
-            ...sg,
-            x1: a.x, y1: a.y, x2: b.x, y2: b.y,
-            lengthFt: o.len !== undefined ? Math.round(o.len * s * 1000) / 1000 : undefined,
-          };
+          // শুধু ছবির জ্যামিতি বদলায় — বাহুর মান (lengthFt) যেমন আছে তেমনই থাকে,
+          // তাই লেবেল/ক্ষেত্রফল/শতক/মোট বার/রিপোর্ট কিছুই বদলায় না
+          return { ...sg, x1: a.x, y1: a.y, x2: b.x, y2: b.y };
         })
       );
       return;
@@ -1001,7 +1010,12 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       const mx = (s.x1 + s.x2) / 2, my = (s.y1 + s.y2) / 2;
       if (s.lengthFt !== undefined) {
         const txt = ftIn(s.lengthFt);
-        items.push({ id: `len:${s.id}`, mx, my, ox: (-dy / len) * 11, oy: (dx / len) * 11, ux, uy, tw: txt.length * 6 + 12, th: 13 });
+        // খাড়া বাহুর লেবেল দাগ বরাবর (৯০° ঘোরানো) বসে — তাই জায়গার হিসাবে
+        // চওড়া/উঁচু উল্টো: ঘোরানো লেবেলের বাক্স সরু (১৩) কিন্তু লম্বা
+        const vertical = Math.abs(dy) > Math.abs(dx);
+        const tw = vertical ? 13 : txt.length * 6 + 12;
+        const th = vertical ? txt.length * 6 + 12 : 13;
+        items.push({ id: `len:${s.id}`, mx, my, ox: (-dy / len) * 11, oy: (dx / len) * 11, ux, uy, tw, th });
       }
       if (s.label) {
         items.push({ id: `txt:${s.id}`, mx, my, ox: (dy / len) * 13, oy: (-dx / len) * 13, ux, uy, tw: s.label.length * 6 + 12, th: 13 });
@@ -1240,10 +1254,11 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
               strokeWidth={selectedId === s.id ? 4 : 3} strokeLinecap="round"
               strokeDasharray={s.dashed ? '7 6' : undefined} />
             {s.lengthFt !== undefined && (() => {
-              // always horizontal (শোয়া), white pill behind so it reads over grid/lines
-              // জায়গা layoutSideLabels থেকে — সরু প্লটে জড়ায় না
-              const txt= ftIn(s.lengthFt);
-              const tw= txt.length*6+12, th=13;
+              // শোয়া বাহুর লেবেল শোয়া, খাড়া বাহুর লেবেল দাগ বরাবর ৯০° ঘোরানো
+              // (নিচ থেকে ওপরে পড়া যায়) — সাদা পিল পেছনে, জায়গা layoutSideLabels থেকে
+              const txt = ftIn(s.lengthFt);
+              const vertical = Math.abs(s.y2 - s.y1) > Math.abs(s.x2 - s.x1);
+              const tw = vertical ? 13 : txt.length * 6 + 12, th = vertical ? txt.length * 6 + 12 : 13;
               const lp = labelPos.get(`len:${s.id}`);
               const cx = lp ? lp.cx : (s.x1 + s.x2) / 2;
               const cy = lp ? lp.cy : (s.y1 + s.y2) / 2;
@@ -1252,7 +1267,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
                   <rect x={cx - tw/2} y={cy - th/2 + 1} width={tw} height={th} rx={6}
                     fill="#ffffff" fillOpacity={0.96} stroke={s.color || '#065f46'} strokeOpacity={0.18} />
                   <text x={cx} y={cy+3.5} fontSize={10}
-                    fill={s.color || '#065f46'} textAnchor="middle" fontWeight="700" style={{ userSelect: 'none' }}>{txt}</text>
+                    fill={s.color || '#065f46'} textAnchor="middle" fontWeight="700" style={{ userSelect: 'none' }}
+                    transform={vertical ? `rotate(-90 ${cx} ${cy})` : undefined}>{txt}</text>
                 </g>
               );
             })()}

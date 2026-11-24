@@ -140,7 +140,10 @@ export const ConverterScreen: React.FC = () => {
   const base = num * u.f; // ফুট বা বর্গফুট
 
   const result = useMemo(() => {
-    if (to === 'ftin') return { main: ftIn(base).txt, sub: `মোট ${nice(base)} ফুট` };
+    // ফলাফল সবসময় পুরো সমীকরণ — "১০ লিংক = ৬ ফুট ৭.২ ইঞ্চি" — যাতে কোনটা
+    // কিসের সমান, তা এক নজরে বোঝা যায় (২৪ নভেম্বর Founder)
+    const lhs = `${toBn(v || '0')} ${u.t}`;
+    if (to === 'ftin') return { main: `${lhs} = ${ftIn(base).txt}`, sub: `মোট ${nice(base)} ফুট` };
     const t = unitOf(kind, to);
     const sub =
       kind === 'len'
@@ -148,8 +151,8 @@ export const ConverterScreen: React.FC = () => {
         : to === 'sqft'
         ? `= ${nice(base / SQFT_PER_DEC, 4)} শতাংশ`
         : `= ${nice(base, 1)} বর্গফুট`;
-    return { main: `${nice(base / t.f, 4)} ${t.t}`, sub };
-  }, [base, kind, to]);
+    return { main: `${lhs} = ${nice(base / t.f, 4)} ${t.t}`, sub };
+  }, [base, kind, to, v, u.t]);
 
   const pushHist = (k: Kind, f: string, val: string) => {
     if (!(parseFloat(val) > 0)) return;
@@ -176,7 +179,17 @@ export const ConverterScreen: React.FC = () => {
     if (to === key) setTo(kind === 'len' ? 'ftin' : key === 'sqft' ? 'dec' : 'sqft');
   };
 
+  /** কী-প্যাডে যেই কি-তে ট্যাপ হবে ভাইব্রেট করবে (২৪ নভেম্বর Founder) */
+  const buzz = () => {
+    try {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(10);
+    } catch {
+      /* ভাইব্রেশন সমর্থন নেই — চুপচাপ */
+    }
+  };
+
   const press = (key: string) => {
+    buzz();
     let next = v;
     let f = from;
     if (key === 'del') next = v.slice(0, -1);
@@ -209,7 +222,7 @@ export const ConverterScreen: React.FC = () => {
   };
 
   const copyResult = async () => {
-    const txt = `${toBn(v || '0')} ${u.t} = ${result.main}`;
+    const txt = result.main; // main-এই পুরো সমীকরণ আছে ("১০ লিংক = ৬ ফুট ৭.২ ইঞ্চি")
     try {
       await navigator.clipboard.writeText(txt);
       say('ফলাফল কপি হলো');
@@ -287,7 +300,7 @@ export const ConverterScreen: React.FC = () => {
         </div>
         <div className="h-[1.5px] bg-amber-200/35 my-1.5 ml-14" />
         <button onClick={copyResult} className="block w-full text-right pl-14" aria-label="ফলাফল কপি করুন">
-          <b className="block text-[28px] font-extrabold text-amber-200 leading-tight">{result.main}</b>
+          <b className="block text-[28px] font-extrabold text-amber-200 leading-tight break-words">{result.main}</b>
           <small className="text-sm font-bold text-emerald-200">{result.sub}</small>
         </button>
       </div>
