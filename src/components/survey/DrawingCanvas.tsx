@@ -1353,7 +1353,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
               className="w-10 h-7 rounded border border-slate-300/80 bg-white/80 px-0.5 text-center text-[12px]"
             />
             <span className="text-[9px] text-slate-500">″</span>
-            <button onClick={() => deleteSegment(sel.id)} className="h-7 px-2 rounded bg-rose-50 text-rose-700 text-[11px] font-bold" title="শুধু এই দাগটা মুছুন">🗑 মুছুন</button>
+            <button onClick={() => { applyLenLive(sel.id, lenInput.f, lenInput.i); setMenu(null); }} className="h-7 px-2 rounded bg-blue-600 text-white text-[11px] font-bold shadow" title="মাপ বসান">✓ সম্পন্ন</button>
             <button onClick={() => setMenu(null)} className="w-6 h-7 rounded text-[11px] font-bold text-slate-500">✕</button>
           </div>
         </div>

@@ -23,8 +23,6 @@ export const LEN_UNITS: Unit[] = [
   { k: 'link', t: 'লিংক', f: 0.66, s: '১ লিংক = ৭.৯২ ইঞ্চি' },
   { k: 'ft', t: 'ফুট', f: 1 },
   { k: 'in', t: 'ইঞ্চি', f: 1 / 12 },
-  { k: 'haat', t: 'হাত', f: 1.5, s: '১ হাত = ১৮ ইঞ্চি' },
-  { k: 'yd', t: 'গজ', f: 3 },
   { k: 'm', t: 'মিটার', f: 3.28084 },
   { k: 'chain', t: 'চেইন', f: 66, s: '১ চেইন = ১০০ লিংক = ৬৬ ফুট' },
 ];
@@ -66,7 +64,19 @@ const HIST_KEY = 'fa_converter_recent_v1';
 const loadHist = (): Hist[] => {
   try {
     const h = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
-    return Array.isArray(h) ? h.filter((x) => Array.isArray(x) && x.length === 3).slice(0, 6) : [];
+    // সরানো একক (হাত/গজ) দিয়ে সেভ করা পুরোনো হিসাব বাদ — না হলে
+    // unitOf ফলব্যাক (লিংক) দিয়ে ভুল নাম দেখাত
+    return Array.isArray(h)
+      ? h
+          .filter(
+            (x) =>
+              Array.isArray(x) &&
+              x.length === 3 &&
+              (x[0] === 'len' || x[0] === 'area') &&
+              LIST(x[0] as Kind).some((u) => u.k === x[1])
+          )
+          .slice(0, 6)
+      : [];
   } catch {
     return [];
   }
@@ -174,6 +184,7 @@ export const ConverterScreen: React.FC = () => {
   };
 
   const pickFrom = (key: string) => {
+    buzz();
     pushHist(kind, from, v);
     setFrom(key);
     if (to === key) setTo(kind === 'len' ? 'ftin' : key === 'sqft' ? 'dec' : 'sqft');
@@ -208,6 +219,7 @@ export const ConverterScreen: React.FC = () => {
   };
 
   const swap = () => {
+    buzz();
     if (to === 'ftin') {
       setFrom('ft');
       setV(String(+base.toFixed(3)));
@@ -222,6 +234,7 @@ export const ConverterScreen: React.FC = () => {
   };
 
   const copyResult = async () => {
+    buzz();
     const txt = result.main; // main-এই পুরো সমীকরণ আছে ("১০ লিংক = ৬ ফুট ৭.২ ইঞ্চি")
     try {
       await navigator.clipboard.writeText(txt);
@@ -252,7 +265,7 @@ export const ConverterScreen: React.FC = () => {
   const qUnit = kind === 'len' ? 'লিংক' : 'শতাংশ';
 
   const chip = (on: boolean, gold = false) =>
-    `shrink-0 min-h-[44px] px-3.5 rounded-full border-[1.5px] text-[15px] font-bold transition active:scale-95 ${
+    `shrink-0 min-h-[48px] px-3.5 rounded-full border-[1.5px] text-[15px] font-bold transition active:scale-95 ${
       on
         ? gold
           ? 'bg-gradient-to-br from-amber-200 to-amber-500 text-amber-950 border-transparent'
@@ -261,9 +274,9 @@ export const ConverterScreen: React.FC = () => {
     }`;
 
   return (
-    <div id="converter-screen" className="-mx-3.5 sm:mx-0 -mt-3.5 pb-6 bg-[#f1f5f2] min-h-[calc(100dvh-70px)] flex flex-col">
-      {/* দৈর্ঘ্য / ক্ষেত্রফল */}
-      <div className="flex bg-white border-b-[1.5px] border-slate-300" role="tablist">
+    <div id="converter-screen" className="-mx-3.5 sm:mx-0 -mt-3.5 pb-6 bg-gradient-to-b from-[#e7f0e9] via-[#f1f5f2] to-[#e9f1ea] min-h-[calc(100dvh-70px)] flex flex-col">
+      {/* দৈর্ঘ্য / ক্ষেত্রফল — প্রিমিয়াম পিল ট্যাব */}
+      <div className="mx-3 mt-3 rounded-full bg-white p-1 shadow-[0_2px_10px_rgba(6,95,70,.10)] flex" role="tablist">
         {(
           [
             ['len', 'দৈর্ঘ্য (বাহু)'],
@@ -274,9 +287,12 @@ export const ConverterScreen: React.FC = () => {
             key={k}
             role="tab"
             aria-selected={kind === k}
-            onClick={() => switchKind(k)}
-            className={`flex-1 min-h-[52px] text-base font-bold border-b-[3px] ${
-              kind === k ? 'text-[#065f46] border-[#065f46]' : 'text-slate-600 border-transparent'
+            onClick={() => {
+              buzz();
+              switchKind(k);
+            }}
+            className={`flex-1 min-h-[48px] rounded-full text-base font-bold transition active:scale-[.98] ${
+              kind === k ? 'bg-[#065f46] text-amber-200 shadow' : 'text-slate-500'
             }`}
           >
             {t}
@@ -284,8 +300,8 @@ export const ConverterScreen: React.FC = () => {
         ))}
       </div>
 
-      {/* বড় ডিসপ্লে */}
-      <div className="relative mx-3 mt-2.5 bg-[#065f46] rounded-3xl px-4 pt-3 pb-3.5 text-white shadow-[0_10px_24px_rgba(6,95,70,.25)]">
+      {/* বড় ডিসপ্লে — সোনালি কিনারাসহ প্রিমিয়াম কার্ড */}
+      <div className="relative mx-3 mt-3 bg-[#065f46] rounded-3xl px-4 pt-3 pb-3.5 text-white shadow-[0_10px_24px_rgba(6,95,70,.28)] ring-1 ring-amber-300/60">
         <button
           onClick={swap}
           aria-label="উল্টান"
@@ -306,47 +322,61 @@ export const ConverterScreen: React.FC = () => {
       </div>
       {u.s && <p className="px-4 pt-1.5 text-sm font-semibold text-slate-600">{u.s}</p>}
 
-      {/* থেকে / কিসে — ডানে আরও চিপ থাকলে ফেড + "›" দেখায় */}
-      <div className="flex items-center gap-1.5 pt-2 pl-3">
-        <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">থেকে</span>
-        <div className="relative flex-1 min-w-0">
-          <div ref={fromRow} onScroll={updateScrollHints} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
-            {LIST(kind).map((x) => (
-              <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
-                {x.t}
-              </button>
-            ))}
+      {/* থেকে / কিসে — একটাই সাদা কার্ডে গোছানো; ডানে আরও চিপ থাকলে ফেড + "›" দেখায় */}
+      <div className="mx-3 mt-3 rounded-3xl bg-white shadow-[0_2px_10px_rgba(15,23,42,.07)] px-3 py-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">থেকে</span>
+          <div className="relative flex-1 min-w-0">
+            <div ref={fromRow} onScroll={updateScrollHints} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
+              {LIST(kind).map((x) => (
+                <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
+                  {x.t}
+                </button>
+              ))}
+            </div>
+            {fromMore && (
+              <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white via-white/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
+                <b className="text-[#065f46] text-lg leading-none">›</b>
+              </span>
+            )}
           </div>
-          {fromMore && (
-            <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#f1f5f2] via-[#f1f5f2]/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
-              <b className="text-[#065f46] text-lg leading-none">›</b>
-            </span>
-          )}
         </div>
-      </div>
-      <div className="flex items-center gap-1.5 pt-2 pl-3">
-        <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">কিসে</span>
-        <div className="relative flex-1 min-w-0">
-          <div ref={toRow} onScroll={updateScrollHints} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
-            {toList.map((x) => (
-              <button key={x.k} onClick={() => setTo(x.k)} className={chip(x.k === to, true)} aria-pressed={x.k === to}>
-                {x.t}
-              </button>
-            ))}
+        <div className="h-px bg-slate-100 my-2" />
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">কিসে</span>
+          <div className="relative flex-1 min-w-0">
+            <div ref={toRow} onScroll={updateScrollHints} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
+              {toList.map((x) => (
+                <button
+                  key={x.k}
+                  onClick={() => {
+                    buzz();
+                    setTo(x.k);
+                  }}
+                  className={chip(x.k === to, true)}
+                  aria-pressed={x.k === to}
+                >
+                  {x.t}
+                </button>
+              ))}
+            </div>
+            {toMore && (
+              <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white via-white/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
+                <b className="text-[#065f46] text-lg leading-none">›</b>
+              </span>
+            )}
           </div>
-          {toMore && (
-            <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#f1f5f2] via-[#f1f5f2]/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
-              <b className="text-[#065f46] text-lg leading-none">›</b>
-            </span>
-          )}
         </div>
       </div>
 
-      {/* দ্রুত টেবিল + সাম্প্রতিক */}
-      <div className="flex gap-1.5 px-3 pt-2.5 overflow-x-auto no-scrollbar">
+      {/* দ্রুত টেবিল + সাম্প্রতিক — সাদা কার্ডে */}
+      <div className="mx-3 mt-2.5 rounded-3xl bg-white shadow-[0_2px_10px_rgba(15,23,42,.07)] px-2 py-2 flex gap-1.5 overflow-x-auto no-scrollbar">
         <button
-          onClick={() => setSheet(true)}
-          className="shrink-0 min-h-[44px] px-3 rounded-2xl bg-[#065f46] text-amber-200 text-sm font-bold flex items-center gap-1.5 active:scale-95 transition"
+          onClick={() => {
+            buzz();
+            setSheet(true);
+          }}
+          className="shrink-0 min-h-[48px] px-3 rounded-2xl bg-[#065f46] text-amber-200 text-sm font-bold flex items-center gap-1.5 active:scale-95 transition"
         >
           <Table2 className="w-[18px] h-[18px]" />
           দ্রুত টেবিল
@@ -357,12 +387,13 @@ export const ConverterScreen: React.FC = () => {
             <button
               key={h.join() + i}
               onClick={() => {
+                buzz();
                 setKind(h[0]);
                 setFrom(h[1]);
                 setV(h[2]);
                 setTo(h[0] === 'len' ? 'ftin' : h[1] === 'sqft' ? 'dec' : 'sqft');
               }}
-              className="shrink-0 min-h-[44px] px-3 rounded-2xl bg-white border-[1.5px] border-dashed border-slate-400 text-sm font-bold text-slate-700 flex items-center gap-1.5 whitespace-nowrap active:scale-95 transition"
+              className="shrink-0 min-h-[48px] px-3 rounded-2xl bg-slate-50 border-[1.5px] border-slate-200 text-sm font-bold text-slate-700 flex items-center gap-1.5 whitespace-nowrap active:scale-95 transition"
             >
               <Clock className="w-[18px] h-[18px] text-[#065f46]" />
               {t.a} <b className="text-[#065f46]">{t.b}</b>
@@ -371,8 +402,9 @@ export const ConverterScreen: React.FC = () => {
         })}
       </div>
 
-      {/* নিজস্ব কী-প্যাড (ফোনের কীবোর্ড লাগে না) */}
-      <div className="mt-auto grid grid-cols-4 gap-[7px] px-3 pt-2.5">
+      {/* নিজস্ব কী-প্যাড (ফোনের কীবোর্ড লাগে না) — সাদা কার্ডে */}
+      <div className="mt-auto mx-3 pt-2.5">
+        <div className="rounded-3xl bg-white shadow-[0_2px_10px_rgba(15,23,42,.07)] p-2.5 grid grid-cols-4 gap-2">
         {keys.map((k) =>
           k === 'del' ? (
             <button key={k} onClick={() => press(k)} aria-label="একটা মুছুন" className="h-[52px] rounded-2xl bg-emerald-50 text-[#065f46] shadow-[0_2px_4px_rgba(15,23,42,.08)] flex items-center justify-center active:scale-95 transition">
@@ -387,11 +419,12 @@ export const ConverterScreen: React.FC = () => {
               {toBn(k.slice(1))} {qUnit}
             </button>
           ) : (
-            <button key={k} onClick={() => press(k)} className="h-[52px] rounded-2xl bg-white text-slate-900 text-2xl font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] active:scale-95 transition">
+            <button key={k} onClick={() => press(k)} className="h-[52px] rounded-2xl bg-slate-50 text-slate-900 text-2xl font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] active:scale-95 transition">
               {toBn(k)}
             </button>
           )
         )}
+        </div>
       </div>
 
       {/* দ্রুত টেবিল শিট */}
@@ -413,7 +446,14 @@ export const ConverterScreen: React.FC = () => {
           <b className="flex-1 text-lg font-extrabold text-[#065f46]">
             দ্রুত টেবিল: {kind === 'len' ? 'লিংক → ফুট-ইঞ্চি' : 'শতাংশ → বর্গফুট'}
           </b>
-          <button onClick={() => setSheet(false)} aria-label="বন্ধ" className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center">
+          <button
+            onClick={() => {
+              buzz();
+              setSheet(false);
+            }}
+            aria-label="বন্ধ"
+            className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 transition"
+          >
             <X className="w-[22px] h-[22px]" />
           </button>
         </div>
@@ -423,6 +463,7 @@ export const ConverterScreen: React.FC = () => {
             <button
               key={n}
               onClick={() => {
+                buzz();
                 const f = kind === 'len' ? 'link' : 'dec';
                 setFrom(f);
                 setV(String(n));
