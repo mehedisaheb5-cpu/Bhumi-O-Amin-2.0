@@ -111,7 +111,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     | { kind: 'endpoint'; id: string; end: 1 | 2 }
     | { kind: 'corner'; heads: { id: string; end: 1 | 2 }[]; sx: number; sy: number; ox: number; oy: number; moved: boolean }
     | { kind: 'plotMove'; plotId: string; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number }[]; moved: boolean }
-    | { kind: 'plotCorner'; plotId: string; corner: { x: number; y: number }; opp: { x: number; y: number }; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; moved: boolean }
+    | { kind: 'plotCorner'; plotId: string; corner: { x: number; y: number }; opp: { x: number; y: number }; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; origAll: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; pts: { x: number; y: number }[]; moved: boolean }
   >({ kind: 'none' });
   /** প্রিভিউ ২০, ঠিক ৭ — হাতে আনলক করা প্লটের রিং id: অটো-লক যেন আবার লক না করে */
   const unlockedRef = useRef<Set<string>>(new Set());
@@ -679,15 +679,26 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         if (cornerPt && orig.length) {
           const idx = lockedPlot.pts.indexOf(cornerPt);
           const opp = lockedPlot.pts[(idx + 2) % lockedPlot.pts.length];
-          press.current = { kind: 'plotCorner', plotId: lockedPlot.id, corner: cornerPt, opp, sx: e.clientX, sy: e.clientY, orig, moved: false };
+          // টান শুরুর পুরো ছবি — ভাগ করা জোড়া ঠিক রাখতে (ঠিক ৪) সব দাগের
+          // আসল জায়গা লাগে; pts = টানা প্লটের ৪ কোনা
+          const origAll = segments.map((s) => ({ id: s.id, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2, len: s.lengthFt }));
+          press.current = { kind: 'plotCorner', plotId: lockedPlot.id, corner: cornerPt, opp, sx: e.clientX, sy: e.clientY, orig, origAll, pts: lockedPlot.pts, moved: false };
           setSelectedId(null);
           vibrate();
           return;
         }
         if (!nearEdge && orig.length) {
-          press.current = { kind: 'plotMove', plotId: lockedPlot.id, sx: e.clientX, sy: e.clientY, orig, moved: false };
-          vibrate();
-          return;
+          // লক প্লটের ভেতরে বাড়তি (অনাথ) দাগে ট্যাপ — প্লট সরানো নয়,
+          // দাগটাই বাছাই হবে (মানের ঘর + 🗑 মুছুন খুলবে); লক প্লটের
+          // নিজের দাগে ট্যাপ আগের মতোই পুরো প্লট সরায়
+          const nearSeg = findSegment(p.x, p.y);
+          if (nearSeg && !completedSegIds().has(nearSeg.id)) {
+            // নিচের সাধারণ দাগ-পথে যাবে (moveSeg) — এখানে return নয়
+          } else {
+            press.current = { kind: 'plotMove', plotId: lockedPlot.id, sx: e.clientX, sy: e.clientY, orig, moved: false };
+            vibrate();
+            return;
+          }
         }
       }
     }
@@ -780,7 +791,13 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     }
     /* প্রিভিউ ২০, ঠিক ৭ — লক প্লটের কোনা টানলে বিপরীত কোনাকে কেন্দ্র করে
        পুরো প্লটের ছবি বড়-ছোট হয়; বাহুর মান/ক্ষেত্রফল যেমন ছিল তেমনই থাকে —
-       ২৪ নভেম্বর Founder: "মাপ পরিবর্তন হবেনা। ওটা যেভাবে আছে ওভাবে থাকবে।" */
+       ২৪ নভেম্বর Founder: "মাপ পরিবর্তন হবেনা। ওটা যেভাবে আছে ওভাবে থাকবে।"
+       ভাগ করা জোড়া (shared junction): টানা প্লটের কোনা সরলে তার সাথে লাগা
+       সরলরেখার ধারাবাহিক দাগগুলোও একসাথে সরে — নইলে পাশের প্লটের বাহু
+       বেঁকে রিং ভেঙে যায়, প্লটটি টানার সময় ক্যানভাস/মোট/রিপোর্ট থেকে
+       হারিয়ে যায় (২৪ নভেম্বর রেকর্ডিং: নিচের 1.77 শতক প্লট আসা-যাওয়া)।
+       টানা প্লটের বাহুর ওপরের জোড়াও (মাঝখানের খুঁটি) একসাথে সরে।
+       সব হিসাব টান শুরুর আসল জায়গা (origAll) থেকে — টানে টানে সরে না। */
     if (g.kind === 'plotCorner') {
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
       g.moved = true;
@@ -788,21 +805,74 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       const d0 = Math.hypot(g.corner.x - g.opp.x, g.corner.y - g.opp.y) || 1;
       let s = Math.hypot(p.x - g.opp.x, p.y - g.opp.y) / d0;
       s = Math.max(0.3, Math.min(3, s));
-      const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
-        g.orig.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
-      );
       const sc = (q: { x: number; y: number }) => ({
         x: g.opp.x + (q.x - g.opp.x) * s,
         y: g.opp.y + (q.y - g.opp.y) * s,
       });
+      const all = g.origAll;
+      const key = (pt: { x: number; y: number }) => `${Math.round(pt.x * 100)},${Math.round(pt.y * 100)}`;
+      const mapped = new Map<string, { x: number; y: number }>();
+      // বীজ: টানা প্লটের ৪ কোনা
+      for (const pt of g.pts) mapped.set(key(pt), sc(pt));
+      // টানা প্লটের বাহুর ওপরের জোড়া (মাঝখানের খুঁটি) — বাহু সোজা থাকে
+      const sides: [{ x: number; y: number }, { x: number; y: number }][] = [];
+      for (let i = 0; i < g.pts.length; i++) sides.push([g.pts[i], g.pts[(i + 1) % g.pts.length]]);
+      const onSide = (pt: { x: number; y: number }) => {
+        for (const [a, b] of sides) {
+          const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+          let t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / l2;
+          if (t < -0.01 || t > 1.01) continue;
+          t = Math.max(0, Math.min(1, t));
+          if (Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy)) < 1) return true;
+        }
+        return false;
+      };
+      for (const sg of all) {
+        for (const pt of [{ x: sg.x1, y: sg.y1 }, { x: sg.x2, y: sg.y2 }]) {
+          const k = key(pt);
+          if (!mapped.has(k) && onSide(pt)) mapped.set(k, sc(pt));
+        }
+      }
+      // ধারাবাহিক দাগ: পুরোপুরি সরছে এমন দাগের সাথে একই সরলরেখায়
+      // লাগা দাগের অপর প্রান্তও একইভাবে সরে — পুরো সোজা বাহু একসাথে যায়
+      let changed = true;
+      let guard = 0;
+      while (changed && guard++ < 20) {
+        changed = false;
+        for (const sg of all) {
+          const aK = key({ x: sg.x1, y: sg.y1 }), bK = key({ x: sg.x2, y: sg.y2 });
+          const aM = mapped.has(aK), bM = mapped.has(bK);
+          if (aM === bM) continue;
+          const mappedPt = aM ? { x: sg.x1, y: sg.y1 } : { x: sg.x2, y: sg.y2 };
+          const unmappedPt = aM ? { x: sg.x2, y: sg.y2 } : { x: sg.x1, y: sg.y1 };
+          const unmappedK = aM ? bK : aK;
+          let cont = false;
+          for (const t of all) {
+            if (t === sg) continue;
+            const tA = key({ x: t.x1, y: t.y1 }), tB = key({ x: t.x2, y: t.y2 });
+            if (!mapped.has(tA) || !mapped.has(tB)) continue;
+            if (tA !== key(mappedPt) && tB !== key(mappedPt)) continue;
+            const tdx = t.x2 - t.x1, tdy = t.y2 - t.y1, sdx = sg.x2 - sg.x1, sdy = sg.y2 - sg.y1;
+            const tl = Math.hypot(tdx, tdy) || 1, sl = Math.hypot(sdx, sdy) || 1;
+            const cross = (tdx * sdy - tdy * sdx) / (tl * sl);
+            const dot = (tdx * sdx + tdy * sdy) / (tl * sl);
+            if (Math.abs(cross) < 0.02 && dot > 0) { cont = true; break; }
+          }
+          if (cont) { mapped.set(unmappedK, sc(unmappedPt)); changed = true; }
+        }
+      }
+      const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
+        all.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
+      );
       setSegments((prev) =>
         prev.map((sg) => {
           const o = byId.get(sg.id);
           if (!o) return sg;
-          const a = sc({ x: o.x1, y: o.y1 }), b = sc({ x: o.x2, y: o.y2 });
+          const a = mapped.get(key({ x: o.x1, y: o.y1 }));
+          const b = mapped.get(key({ x: o.x2, y: o.y2 }));
           // শুধু ছবির জ্যামিতি বদলায় — বাহুর মান (lengthFt) যেমন আছে তেমনই থাকে,
           // তাই লেবেল/ক্ষেত্রফল/শতক/মোট বার/রিপোর্ট কিছুই বদলায় না
-          return { ...sg, x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+          return { ...sg, x1: a ? a.x : o.x1, y1: a ? a.y : o.y1, x2: b ? b.x : o.x2, y2: b ? b.y : o.y2 };
         })
       );
       return;
@@ -1000,7 +1070,10 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   const sel = segments.find((s) => s.id === selectedId) || null;
 
   /* বাহুর মানের লেবেলের জায়গা — সরু প্লটে দুটো লেবেল জড়িয়ে যায় বলে
-     layoutSideLabels দিয়ে জায়গা ঠিক করা হয় (উল্টো পাশে / সরিয়ে)। */
+     layoutSideLabels দিয়ে জায়গা ঠিক করা হয় (উল্টো পাশে / সরিয়ে)।
+     প্লটের নাম/শতক কার্ডও (চিপ) বাধা হিসেবে দেওয়া হয় — লেবেল যেন
+     কার্ডের ওপর না পড়ে (২৪ নভেম্বর রেকর্ডিং: ভেতরের 23′ 0″ লেবেল
+     চিপের গায়ে জড়িয়ে পড়া যেত না)। কার্ড সরালে/বড় করলেও লেবেল সরে। */
   const labelPos = useMemo(() => {
     const items: LabelItem[] = [];
     for (const s of segments) {
@@ -1021,8 +1094,20 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         items.push({ id: `txt:${s.id}`, mx, my, ox: (dy / len) * 13, oy: (-dx / len) * 13, ux, uy, tw: s.label.length * 6 + 12, th: 13 });
       }
     }
-    return layoutSideLabels(items, { w: W, h: viewH });
-  }, [segments, viewH]);
+    // চিপ কার্ডের বাক্স — রেন্ডারে যে (cardX, cardY, w, h) বসে ঠিক সেটাই
+    const chips = polygonsMemo
+      .filter((poly) => plotMeta(poly.id).style !== 'plain')
+      .map((poly) => {
+        const meta = plotMeta(poly.id);
+        const area = plotArea(poly);
+        const hasName = !!(meta.title && meta.title.trim());
+        const hasDag = !!(meta.dagNo || area || hasName);
+        const hasArea = !!area;
+        const { w, h } = boxSize(meta, hasName, hasDag, hasArea);
+        return { cx: poly.cx + (meta.dx ?? 0), cy: poly.cy + (meta.dy ?? 0), tw: w, th: h };
+      });
+    return layoutSideLabels(items, { w: W, h: viewH }, chips);
+  }, [segments, viewH, polygonsMemo, plotMetas]);
 
   /* মোট শতক — হিসাব আছে এমন সব প্লটের যোগফল, মান বদলালে নিজে থেকে বদলায় */
   const totalAreas = polygonsMemo.map((pl) => plotArea(pl)).filter((a): a is NonNullable<ReturnType<typeof plotArea>> => !!a);
@@ -1127,7 +1212,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       </div>
 
       {hint && (
-        <div className="absolute z-30 left-1/2 -translate-x-1/2 bottom-2 w-[92%] max-w-sm rounded-xl bg-slate-900/85 backdrop-blur text-white text-[10px] leading-snug px-2.5 py-1.5 shadow-lg">
+        // মোট বার দেখা গেলে হিন্ট বারটার ওপরে ওঠে — নইলে বার ঢেকে যেত
+        <div className={`absolute z-30 left-1/2 -translate-x-1/2 ${totalAreas.length > 0 ? 'bottom-[2.9rem]' : 'bottom-2'} w-[92%] max-w-sm rounded-xl bg-slate-900/85 backdrop-blur text-white text-[10px] leading-snug px-2.5 py-1.5 shadow-lg`}>
           {hint}
         </div>
       )}
@@ -1138,6 +1224,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         viewBox={`0 0 ${W} ${viewH}`}
         preserveAspectRatio="none"
         className="w-full bg-white touch-none border border-slate-300 rounded-xl block"
+        // svg উচ্চতা: চিত্র ট্যাবে হেডার লুকানো থাকায় অফসেট (৩.৪rem) দিলে svg ~৫১০px হয় —
+        // নিচের মোট বারও নেভিগেশনের ওপরে দেখা যায়, আবার পুরো নকশাও ধরে
         style={{ height: 'calc(100dvh - 13.5rem - var(--fa-canvas-offset, 0px))', minHeight: '15rem' }}
         onPointerDown={handleDown}
         onPointerMove={handleMove}
@@ -1354,6 +1442,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
             />
             <span className="text-[9px] text-slate-500">″</span>
             <button onClick={() => { applyLenLive(sel.id, lenInput.f, lenInput.i); setMenu(null); }} className="h-7 px-2 rounded bg-blue-600 text-white text-[11px] font-bold shadow" title="মাপ বসান">✓ সম্পন্ন</button>
+            {/* বাড়তি/অনাথ দাগ এক ট্যাপে মোছা — লক প্লটের দাগ হলে
+               deleteSegment নিজেই আনলকের হিন্ট দেয়, মুছে না */}
+            <button onClick={() => { if (sel) deleteSegment(sel.id); }} className="h-7 px-2 rounded bg-rose-600 text-white text-[11px] font-bold shadow" title="এই দাগটা মুছুন">🗑 মুছুন</button>
             <button onClick={() => setMenu(null)} className="w-6 h-7 rounded text-[11px] font-bold text-slate-500">✕</button>
           </div>
         </div>

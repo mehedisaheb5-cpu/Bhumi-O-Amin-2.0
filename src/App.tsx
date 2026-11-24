@@ -118,6 +118,13 @@ export default function App() {
     return { screenId: 'home' };
   });
 
+  // চিত্র ভিত্তিক ট্যাব খোলা আছে কি না — খোলা থাকলে ওপরের হেডার দুটো লুকিয়ে
+  // ক্যানভাসকে পুরো জায়গা দেওয়া হয় (মোট বার + নাম + পুরো নকশা ধরে)
+  const [surveyTab, setSurveyTab] = useState<string>('plots_survey');
+  const isDrawingTab =
+    (currentScreen.screenId === 'possession' || currentScreen.screenId === 'measure_possession') &&
+    surveyTab === 'drawing_based';
+
   // Modal State
   const [showChatModal, setShowChatModal] = useState<boolean>(false);
   // ফিল্ড আমিন: সাইড প্যানেল (☰)
@@ -514,6 +521,7 @@ export default function App() {
       <OfflineIndicator lang={lang} />
 
       {/* Top Application Bar - Light theme, clicking brand navigates to Home */}
+      {!isDrawingTab && (
       <Header
         lang={lang}
         onToggleLang={handleToggleLang}
@@ -524,6 +532,7 @@ export default function App() {
           navigateTo({ screenId: 'services' });
         }}
       />
+      )}
 
       {/* Main Content View Area */}
       <ErrorBoundary>
@@ -564,6 +573,7 @@ export default function App() {
         {/* P1: দখল পরিমাপ — direct possession (4 bahu + percent auto, no mouza) */}
         {currentScreen.screenId === 'possession' && (
           <div className="space-y-3 animate-fadeIn">
+            {surveyTab !== 'drawing_based' && (
             <div className="flex items-center gap-2">
               <button
                 onClick={goBack}
@@ -581,12 +591,14 @@ export default function App() {
                 </p>
               </div>
             </div>
+            )}
             <SurveyScreen
               lang={lang}
               surveys={surveys}
               bookingId={currentScreen.bookingId}
               initialSurveyId={currentScreen.surveyId}
               onSaveSurvey={handleSaveSurvey}
+              onActiveTabChange={setSurveyTab}
               onOpenMapDrawing={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',
@@ -651,6 +663,7 @@ export default function App() {
         {/* 5. জমি মাপুন: দখল পরিমাপ (Field GPS Boundary & Possession Demarcation) */}
         {currentScreen.screenId === 'measure_possession' && (
           <div className="space-y-3 animate-fadeIn">
+            {surveyTab !== 'drawing_based' && (
             <div className="flex items-center gap-2">
               <button
                 onClick={goBack}
@@ -670,6 +683,7 @@ export default function App() {
                 </p>
               </div>
             </div>
+            )}
 
             <SurveyScreen
               lang={lang}
@@ -677,6 +691,7 @@ export default function App() {
               bookingId={currentScreen.bookingId}
               initialSurveyId={currentScreen.surveyId}
               onSaveSurvey={handleSaveSurvey}
+              onActiveTabChange={setSurveyTab}
               onOpenMapDrawing={SHOW_LEGACY_MAP_LINKS ? ((sId) =>
                 navigateTo({
                   screenId: 'maps_and_drawings',

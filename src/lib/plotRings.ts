@@ -169,7 +169,9 @@ export function findPlotRings(segments: RingSegment[]): PlotRing[] {
    একটা আরেকটার নিচে চাপা পড়ে — তাই লেবেল বসানোর আগে জায়গা ঠিক করা হয়:
    ১) দাগের নিজের পাশে, ২) না হলে দাগের উল্টো পাশে (প্লটের বাইরে),
    ৩) না হলে যেটার সাথে জড়াচ্ছে সেটাকে উল্টো পাশে সরিয়ে,
-   ৪) না হলে দাগ বরাবর ওপরে/নিচে সরিয়ে। */
+   ৪) না হলে দাগ বরাবর ওপরে/নিচে সরিয়ে।
+   ৫) প্লটের নাম/শতক কার্ডের (চিপ) ওপরেও লেবেল পড়ে না — চিপ obstacles
+   হিসেবে দেওয়া হয়; লেবেল সেখান থেকেও সরে যায় (উল্টো পাশে / সরিয়ে)। */
 
 export type LabelItem = {
   id: string;
@@ -185,7 +187,10 @@ export type LabelItem = {
 
 export function layoutSideLabels(
   items: LabelItem[],
-  bounds: { w: number; h: number }
+  bounds: { w: number; h: number },
+  // প্লটের নাম/শতক কার্ড (চিপ) — বাহুর লেবেল যেন কার্ডের ওপর না পড়ে
+  // (২৪ নভেম্বর রেকর্ডিং: ভেতরের 23′ 0″ লেবেল চিপের গায়ে জড়িয়ে পড়া যেত না)
+  obstacles: { cx: number; cy: number; tw: number; th: number }[] = []
 ): Map<string, { cx: number; cy: number }> {
   type Placed = LabelItem & { cx: number; cy: number };
   const placed: Placed[] = [];
@@ -194,11 +199,15 @@ export function layoutSideLabels(
     cx: Math.max(tw / 2 + 2, Math.min(bounds.w - tw / 2 - 2, cx)),
     cy: Math.max(th / 2 + 2, Math.min(bounds.h - th / 2 - 2, cy)),
   });
+  // পাশাপাশি দুটো লেবেলের মাঝে ৪ একক ফাঁকা — সরু ফালিতে একই মানের
+  // (যেমন দুটো 23′ 0″) লেবেল যেন গায়ে গায়ে না লাগে
   const overlaps = (a: { cx: number; cy: number; tw: number; th: number }, b: { cx: number; cy: number; tw: number; th: number }) =>
-    Math.abs(a.cx - b.cx) < (a.tw + b.tw) / 2 + 2 && Math.abs(a.cy - b.cy) < (a.th + b.th) / 2 + 2;
+    Math.abs(a.cx - b.cx) < (a.tw + b.tw) / 2 + 4 && Math.abs(a.cy - b.cy) < (a.th + b.th) / 2 + 4;
+  const hitsObstacle = (c: { cx: number; cy: number; tw: number; th: number }) =>
+    obstacles.some((o) => Math.abs(c.cx - o.cx) < (c.tw + o.tw) / 2 + 4 && Math.abs(c.cy - o.cy) < (c.th + o.th) / 2 + 4);
   const box = (c: { cx: number; cy: number }, tw: number, th: number) => ({ cx: c.cx, cy: c.cy, tw, th });
   const cleanVs = (cand: { cx: number; cy: number; tw: number; th: number }, skipId?: string) =>
-    !placed.some((p) => p.id !== skipId && overlaps(cand, p));
+    !placed.some((p) => p.id !== skipId && overlaps(cand, p)) && !hitsObstacle(cand);
 
   for (const it of items) {
     const base = clamp(it.mx + it.ox, it.my + it.oy, it.tw, it.th);

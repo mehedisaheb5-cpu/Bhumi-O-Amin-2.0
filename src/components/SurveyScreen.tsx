@@ -91,6 +91,9 @@ interface SurveyScreenProps {
   onOpenMouzaMap?: (surveyId?: string) => void;
   bookingId?: string | null;
   initialSurveyId?: string | null;
+  // চিত্র ভিত্তিক ট্যাব খুললে App-কে জানানো — ওপরের হেডার দুটো লুকিয়ে
+  // ক্যানভাসকে পুরো জায়গা দেওয়া হয় (মোট বার + নাম + পুরো নকশা ধরে)
+  onActiveTabChange?: (tab: 'plots_survey' | 'drawing_based' | 'gps_survey' | 'saved_records') => void;
 }
 
 export const SurveyScreen: React.FC<SurveyScreenProps> = ({
@@ -103,6 +106,7 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
   onOpenMouzaMap,
   bookingId,
   initialSurveyId,
+  onActiveTabChange,
 }) => {
   const t = translations[lang].survey;
   const isBn = lang === 'bn';
@@ -132,6 +136,11 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
   const [activeTab, setActiveTab] = useState<'plots_survey' | 'drawing_based' | 'gps_survey' | 'saved_records'>(
     initialSurveyId ? 'saved_records' : 'plots_survey'
   );
+
+  // ট্যাব বদলালে App-কে জানাই (মাউন্টেও একবার — পুরনো ট্যাব যেন না থেকে যায়)
+  useEffect(() => {
+    onActiveTabChange?.(activeTab);
+  }, [activeTab, onActiveTabChange]);
   const [wizardKey, setWizardKey] = useState(0);
   /** প্রিভিউ ২০, ঠিক ৪ — প্রিভিউ (👁) বোতাম এখন ওপরে "✓ সম্পন্ন"-এর পাশে;
      ক্যানভাসের printCanvas এই রেফ দিয়ে চলে। */
@@ -672,20 +681,23 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
           />
         )
       ) : activeTab === 'drawing_based' ? (
-        <div style={{ ['--fa-canvas-offset' as string]: '3.25rem' } as React.CSSProperties}>
-          {/* বাহু থেকে আসা কাজের তথ্য + ফেরার বোতাম (ক্যানভাসের ভেতরে হাত দিইনি) */}
-          <div id="drawing-info-strip" className="flex items-center gap-2 h-[2.9rem] mb-1">
+        <div style={{ ['--fa-canvas-offset' as string]: '3.4rem' } as React.CSSProperties}>
+          {/* বাহু থেকে আসা কাজের তথ্য + ফেরার বোতাম (ক্যানভাসের ভেতরে হাত দিইনি)।
+             নাম এখন নিজের সারিতে পুরো চওড়া — আগে সরু ঘরে "এরশান · উত্তর ..."
+             কেটে যেত (২৪ নভেম্বর রেকর্ডিং); বোতামগুলো নিচের সারিতে। */}
+          <div id="drawing-info-strip" className="mb-1">
+            <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200">
+              <span className="block text-[15px] font-bold text-emerald-950 leading-snug line-clamp-2" title={bahuInfoLine || undefined}>
+                {bahuInfoLine || (isBn ? 'চিত্র ভিত্তিক পরিমাপ' : 'Drawing-based')}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 h-12">
             <button
               onClick={() => setActiveTab('plots_survey')}
               className="shrink-0 h-full px-3 rounded-xl bg-white border-2 border-emerald-800 text-emerald-900 text-[15px] font-extrabold"
             >
               ← বাহু
             </button>
-            <div className="flex-1 min-w-0 h-full px-3 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center">
-              <span className="truncate text-[15px] font-bold text-emerald-950">
-                {bahuInfoLine || (isBn ? 'চিত্র ভিত্তিক পরিমাপ' : 'Drawing-based')}
-              </span>
-            </div>
             <button
               id="drawing-preview"
               onClick={() => printRef.current?.()}
@@ -702,6 +714,7 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
             >
               ✓ সম্পন্ন
             </button>
+            </div>
           </div>
           {stripMsg && (
             <div className="relative z-30">
