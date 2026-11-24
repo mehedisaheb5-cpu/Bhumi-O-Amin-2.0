@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Printer,
@@ -27,6 +27,7 @@ import {
   saveReportRecord,
   deleteReportRecord,
   createReportFromSurvey,
+  ensureReportMatchesSurvey,
   validateSurveyForReport,
   generateReportNumber,
 } from '../../lib/survey-report-utils';
@@ -155,6 +156,23 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
 
     return null;
   });
+
+  // অটো-রিজেনারেট (Founder সিদ্ধান্ত ২৪ নভেম্বর ২০২৬ ২২:১৩ — "নিজে থেকে ঠিক করো"):
+  // খোলা রিপোর্টের সংখ্যা তার জরিপের বর্তমান সংখ্যার সাথে না মিললে (যেমন পুরোনো
+  // রিপোর্টে ০.০০ শতাংশ, জরিপে ১৫ শতাংশ) রিপোর্টটি জরিপ থেকে নতুন করে বানিয়ে
+  // দেখানো হয় ও সেভ করা হয় — কিছু চাপতে হয় না। জরিপ না পাওয়া গেলে সেভ করা
+  // রিপোর্ট যেমন আছে তেমনই থাকে। useLayoutEffect যাতে পেইন্টের আগেই ঠিক হয়ে
+  // যায় (পুরোনো ০.০০ এক ঝলকও না দেখায়)। রিজেনারেট করা রিপোর্টের id একই
+  // থাকে, আর দ্বিতীয়বার যাচাইয়ে মিলে যায় বলে লুপ হয় না।
+  useLayoutEffect(() => {
+    if (!currentReport) return;
+    const survey = surveys.find((s) => s.id === currentReport.surveyId);
+    const { report, regenerated } = ensureReportMatchesSurvey(currentReport, survey);
+    if (regenerated) {
+      setCurrentReport(report);
+      setSavedReports(getStoredReports());
+    }
+  }, [currentReport, surveys]);
 
   // Editor Modal state
   const [isEditorOpen, setIsEditorOpen] = useState(false);

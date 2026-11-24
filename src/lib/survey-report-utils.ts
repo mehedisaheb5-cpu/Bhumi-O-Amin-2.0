@@ -85,9 +85,86 @@ export function deleteReportRecord(reportId: string): SurveyReportRecord[] {
 }
 
 /**
- * Generate a deterministic unique report number
- * Format: BHOA-YYYYMMDD-XXXX (e.g. BHOA-20260914-0001)
+ * Auto-regenerate (Founder সিদ্ধান্ত ২৪ নভেম্বর ২০২৬ ২২:১৩ — "নিজে থেকে ঠিক করো"):
+ * সেভ করা রিপোর্ট একটি স্ন্যাপশট; জরিপ পরে বদলালে (বা রিপোর্টটি এমন সময়ে সেভ
+ * হয়ে থাকলে যখন জরিপে তখনো হিসাব ছিল না) সেভ করা সংখ্যা বাসি হয়ে যায় —
+ * যেমন ১৫-শতক জরিপের রিপোর্টে "মোট 0.00 শতাংশ" দেখায়। রিপোর্ট খোলার সময়
+ * সেভ করা রিপোর্টের হিসাব-সংক্রান্ত (derived) মান জরিপ থেকে নতুন করে বের
+ * করা মানের সাথে মেলানো হয়; না মিললে শুধু ওই মানগুলো জরিপ থেকে নতুন করে
+ * বানিয়ে সেভ করা হয়। পরিচয় ও ব্যবহারকারীর এডিট করা ঘর (id, reportNumber,
+ * status, title, ক্লায়েন্ট/তারিখ/মৌজা/দাগ, notes, owner/booking id,
+ * parcel/map তুলনা) কখনো বদলানো হয় না। জরিপ খুঁজে না পাওয়া গেলে সেভ করা
+ * রিপোর্ট যেমন আছে তেমনই ফেরত যায় — খালি করা বা মোছা হয় না।
  */
+export interface ReportFreshnessResult {
+  report: SurveyReportRecord;
+  regenerated: boolean;
+  reasons: string[];
+}
+
+const REPORT_DECIMAL_TOLERANCE = 0.01;
+const REPORT_AREA_TOLERANCE_SQFT = 1;
+
+export function ensureReportMatchesSurvey(
+  saved: SurveyReportRecord,
+  survey: SurveyRecord | null | undefined
+): ReportFreshnessResult {
+  if (!saved) return { report: saved, regenerated: false, reasons: [] };
+  if (!survey) return { report: saved, regenerated: false, reasons: [] };
+
+  const fresh = createReportFromSurvey(survey);
+  const reasons: string[] = [];
+
+  if (Math.abs((fresh.decimal || 0) - (saved.decimal || 0)) > REPORT_DECIMAL_TOLERANCE) {
+    reasons.push(`decimal ${saved.decimal} → ${fresh.decimal}`);
+  }
+  if (Math.abs((fresh.areaSqFt || 0) - (saved.areaSqFt || 0)) > REPORT_AREA_TOLERANCE_SQFT) {
+    reasons.push(`areaSqFt ${saved.areaSqFt} → ${fresh.areaSqFt}`);
+  }
+  const freshPlots = fresh.plots || [];
+  const savedPlots = saved.plots || [];
+  if (freshPlots.length !== savedPlots.length) {
+    reasons.push(`plots ${savedPlots.length} → ${freshPlots.length}`);
+  } else {
+    for (let i = 0; i < freshPlots.length; i++) {
+      const f = freshPlots[i];
+      const s = savedPlots[i];
+      if (
+        Math.abs((f.decimal ?? 0) - (s.decimal ?? 0)) > REPORT_DECIMAL_TOLERANCE ||
+        (f.dagNo || '') !== (s.dagNo || '')
+      ) {
+        reasons.push(`plot ${i + 1} decimal ${s.decimal} → ${f.decimal}`);
+        break;
+      }
+    }
+  }
+
+  if (reasons.length === 0) {
+    return { report: saved, regenerated: false, reasons: [] };
+  }
+
+  // শুধু হিসাব-সংক্রান্ত মানগুলো নতুন করে বসানো — বাকি সব সেভ করা অবস্থায়ই থাকে।
+  const rebuilt: SurveyReportRecord = {
+    ...saved,
+    points: fresh.points,
+    plots: fresh.plots,
+    areaSqFt: fresh.areaSqFt,
+    areaSqMeters: fresh.areaSqMeters,
+    perimeterFt: fresh.perimeterFt,
+    perimeterMeters: fresh.perimeterMeters,
+    decimal: fresh.decimal,
+    katha: fresh.katha,
+    bigha: fresh.bigha,
+    acre: fresh.acre,
+    avgAccuracy: fresh.avgAccuracy,
+    bestAccuracy: fresh.bestAccuracy,
+    worstAccuracy: fresh.worstAccuracy,
+    annotations: fresh.annotations,
+    updatedAt: Date.now(),
+  };
+  saveReportRecord(rebuilt);
+  return { report: rebuilt, regenerated: true, reasons };
+}
 export function generateReportNumber(date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
