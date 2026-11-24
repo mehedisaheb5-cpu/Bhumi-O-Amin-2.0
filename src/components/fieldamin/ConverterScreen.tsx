@@ -106,6 +106,25 @@ export const ConverterScreen: React.FC = () => {
   // বাছাই করা চিপ সারির বাইরে চলে গেলে দেখা যায় এমন জায়গায় আনা
   const fromRow = useRef<HTMLDivElement>(null);
   const toRow = useRef<HTMLDivElement>(null);
+  // চিপের সারি ডানে আরও আছে কিনা — থাকলে ডানদিকে ফেড + "›" দেখানো হয়
+  const [fromMore, setFromMore] = useState(false);
+  const [toMore, setToMore] = useState(false);
+  const updateScrollHints = () => {
+    for (const [row, set] of [
+      [fromRow.current, setFromMore],
+      [toRow.current, setToMore],
+    ] as const) {
+      if (row) set(row.scrollWidth - row.clientWidth - row.scrollLeft > 4);
+    }
+  };
+  useEffect(() => {
+    updateScrollHints();
+  }, [kind, from, to]);
+  useEffect(() => {
+    updateScrollHints();
+    window.addEventListener('resize', updateScrollHints);
+    return () => window.removeEventListener('resize', updateScrollHints);
+  }, []);
   useEffect(() => {
     for (const row of [fromRow.current, toRow.current]) {
       const el = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
@@ -229,7 +248,7 @@ export const ConverterScreen: React.FC = () => {
     }`;
 
   return (
-    <div id="converter-screen" className="-mx-3.5 sm:mx-0 -mt-3.5 pb-[100px] bg-[#f1f5f2] min-h-[calc(100dvh-70px)] flex flex-col">
+    <div id="converter-screen" className="-mx-3.5 sm:mx-0 -mt-3.5 pb-6 bg-[#f1f5f2] min-h-[calc(100dvh-70px)] flex flex-col">
       {/* দৈর্ঘ্য / ক্ষেত্রফল */}
       <div className="flex bg-white border-b-[1.5px] border-slate-300" role="tablist">
         {(
@@ -274,25 +293,39 @@ export const ConverterScreen: React.FC = () => {
       </div>
       {u.s && <p className="px-4 pt-1.5 text-sm font-semibold text-slate-600">{u.s}</p>}
 
-      {/* থেকে / কিসে */}
+      {/* থেকে / কিসে — ডানে আরও চিপ থাকলে ফেড + "›" দেখায় */}
       <div className="flex items-center gap-1.5 pt-2 pl-3">
         <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">থেকে</span>
-        <div ref={fromRow} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
-          {LIST(kind).map((x) => (
-            <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
-              {x.t}
-            </button>
-          ))}
+        <div className="relative flex-1 min-w-0">
+          <div ref={fromRow} onScroll={updateScrollHints} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
+            {LIST(kind).map((x) => (
+              <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
+                {x.t}
+              </button>
+            ))}
+          </div>
+          {fromMore && (
+            <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#f1f5f2] via-[#f1f5f2]/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
+              <b className="text-[#065f46] text-lg leading-none">›</b>
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-1.5 pt-2 pl-3">
         <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">কিসে</span>
-        <div ref={toRow} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
-          {toList.map((x) => (
-            <button key={x.k} onClick={() => setTo(x.k)} className={chip(x.k === to, true)} aria-pressed={x.k === to}>
-              {x.t}
-            </button>
-          ))}
+        <div className="relative flex-1 min-w-0">
+          <div ref={toRow} onScroll={updateScrollHints} className="flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar">
+            {toList.map((x) => (
+              <button key={x.k} onClick={() => setTo(x.k)} className={chip(x.k === to, true)} aria-pressed={x.k === to}>
+                {x.t}
+              </button>
+            ))}
+          </div>
+          {toMore && (
+            <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-[#f1f5f2] via-[#f1f5f2]/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
+              <b className="text-[#065f46] text-lg leading-none">›</b>
+            </span>
+          )}
         </div>
       </div>
 
@@ -337,7 +370,7 @@ export const ConverterScreen: React.FC = () => {
               মুছুন
             </button>
           ) : k.startsWith('q') ? (
-            <button key={k} onClick={() => press(k)} className="h-[52px] rounded-2xl bg-amber-50 text-amber-800 text-[15px] font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] leading-tight active:scale-95 transition">
+            <button key={k} onClick={() => press(k)} className="h-[52px] rounded-2xl bg-amber-50 text-amber-800 text-[13px] font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] leading-tight px-1 active:scale-95 transition">
               {toBn(k.slice(1))} {qUnit}
             </button>
           ) : (

@@ -1028,33 +1028,34 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
           <button
             onClick={() => setOpen(true)}
             onPointerDown={(e) => { e.stopPropagation(); tbDown(e); }}
-            className="w-9 h-9 rounded-full bg-emerald-900/80 backdrop-blur text-white shadow-md flex items-center justify-center text-sm touch-none active:scale-95"
+            className="w-12 h-12 rounded-full bg-emerald-900/80 backdrop-blur text-white shadow-md flex items-center justify-center text-lg touch-none active:scale-95"
             aria-label="টুল"
           >
             ⠿
           </button>
         ) : (
           <div className="rounded-xl bg-white/75 backdrop-blur-md border border-slate-300/80 shadow-lg p-0.5">
-            <div className="grid grid-cols-4 gap-0.5 w-[8.6rem] text-[8px] font-semibold leading-none">
-              <button onClick={undo} disabled={!segments.length} className="h-7 rounded-lg bg-white/70 text-slate-700 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">↶</span></button>
-              <button onClick={redo} disabled={!redoStack.length} className="h-7 rounded-lg bg-white/70 text-slate-700 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">↷</span></button>
-              <button onClick={() => { if (sel) deleteSegment(sel.id); }} disabled={!sel} className="h-7 rounded-lg bg-rose-50/80 text-rose-700 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">🗑</span></button>
+            <div className="grid grid-cols-4 gap-0.5 w-[12.5rem] text-[10px] font-semibold leading-none">
+              <button onClick={undo} disabled={!segments.length} className="h-11 rounded-lg bg-white/70 text-slate-800 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">↶</span><span>ফেরান</span></button>
+              <button onClick={redo} disabled={!redoStack.length} className="h-11 rounded-lg bg-white/70 text-slate-800 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">↷</span><span>আবার</span></button>
+              <button onClick={() => { if (sel) deleteSegment(sel.id); }} disabled={!sel} className="h-11 rounded-lg bg-rose-50/80 text-rose-700 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">🗑</span><span>মুছুন</span></button>
               <button
                 onClick={() => setOpen(false)}
-                className="h-7 rounded-lg bg-slate-800/85 text-white flex flex-col items-center justify-center"
+                className="h-11 rounded-lg bg-slate-800/85 text-white flex flex-col items-center justify-center gap-0.5"
                 title="টুলবার বন্ধ করুন"
                 aria-label="টুলবার বন্ধ করুন"
-              ><span className="text-[11px]">✕</span></button>
+              ><span className="text-base leading-none">✕</span><span>বন্ধ</span></button>
 
-              <button onClick={() => { if (sel) { setLabelInput(sel.label ?? ''); setLabelColor(sel.color || activeColor); setMenu({ kind: 'label', id: sel.id }); } else { setHint('আগে একটা দাগে ট্যাপ করুন, তারপর Aa চাপুন।'); window.setTimeout(() => setHint(null), 3000); } }} className="h-7 rounded-lg bg-sky-50/80 text-sky-900 flex flex-col items-center justify-center disabled:opacity-40"><span className="text-[11px]">Aa</span></button>
-              <button onClick={handleComplete} className="h-7 rounded-lg bg-blue-600 text-white flex flex-col items-center justify-center shadow" title="ড্রয়িং কমপ্লিট ✓"><span className="text-[11px]">✓</span></button>
+              <button onClick={() => { if (sel) { setLabelInput(sel.label ?? ''); setLabelColor(sel.color || activeColor); setMenu({ kind: 'label', id: sel.id }); } else { setHint('আগে একটা দাগে ট্যাপ করুন, তারপর Aa চাপুন।'); window.setTimeout(() => setHint(null), 3000); } }} className="h-11 rounded-lg bg-sky-50/80 text-sky-900 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70"><span className="text-base leading-none">Aa</span><span>লেখা</span></button>
+              <button onClick={handleComplete} className="h-11 rounded-lg bg-blue-600 text-white flex flex-col items-center justify-center gap-0.5 shadow" title="ড্রয়িং কমপ্লিট ✓"><span className="text-base leading-none">✓</span><span>সম্পন্ন</span></button>
               <button
                 onClick={() => setColorsOpen((v) => !v)}
-                className={`h-7 rounded-lg flex items-center justify-center ${colorsOpen ? 'bg-emerald-100 ring-1 ring-emerald-700' : 'bg-white/70'}`}
+                className={`h-11 rounded-lg flex flex-col items-center justify-center gap-0.5 ${colorsOpen ? 'bg-emerald-100 ring-1 ring-emerald-700' : 'bg-white/70'}`}
                 title="রঙ — ট্যাপ করলে রঙের তালিকা খুলবে"
                 aria-label="রঙ"
               >
-                <span className="w-4 h-4 rounded-full border border-white shadow" style={{ background: activeColor }} />
+                <span className="w-6 h-6 rounded-full border border-white shadow" style={{ background: activeColor }} />
+                <span>রঙ</span>
               </button>
               <button
                 onClick={() => {
@@ -1063,34 +1064,34 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
                     setSegments([]); setRedoStack([]); setSelectedId(null); setMenu(null); setPlotMetas([]);
                   }
                 }}
-                className="h-7 rounded-lg bg-white/70 text-slate-500 flex flex-col items-center justify-center"
+                className="h-11 rounded-lg bg-white/70 text-slate-600 flex flex-col items-center justify-center gap-0.5"
                 title="সব মুছে ফেলুন"
-              ><span className="text-[10px]">⟳</span></button>
+              ><span className="text-base leading-none">⟳</span><span>সব মুছুন</span></button>
             </div>
 
             {/* বিভাজক দাগ — তৈরি প্লটের ওপর টেনে ভাগ করুন (প্রিভিউ ২০, ঠিক ৪) */}
-            <div className="grid grid-cols-2 gap-0.5 pt-0.5 text-[8px] font-semibold leading-none">
+            <div className="grid grid-cols-2 gap-0.5 pt-0.5 text-[10px] font-semibold leading-none">
               <button
                 onClick={() => pickDividerTool('solid')}
-                className={`h-9 rounded-lg flex flex-col items-center justify-center gap-0.5 ${dividerTool === 'solid' ? 'bg-emerald-700 text-white shadow' : 'bg-white/70 text-slate-700'}`}
+                className={`h-11 rounded-lg flex flex-col items-center justify-center gap-0.5 ${dividerTool === 'solid' ? 'bg-emerald-700 text-white shadow' : 'bg-white/70 text-slate-700'}`}
                 title="সোজা দাগ — তৈরি প্লটের এক কিনারা থেকে আরেক কিনারায় টানুন"
               >
-                <span className="block w-[3px] h-[14px] bg-current rounded-full" />
+                <span className="block w-[3px] h-[16px] bg-current rounded-full" />
                 <span>সোজা দাগ</span>
               </button>
               <button
                 onClick={() => pickDividerTool('dotted')}
-                className={`h-9 rounded-lg flex flex-col items-center justify-center gap-0.5 ${dividerTool === 'dotted' ? 'bg-emerald-700 text-white shadow' : 'bg-white/70 text-slate-700'}`}
+                className={`h-11 rounded-lg flex flex-col items-center justify-center gap-0.5 ${dividerTool === 'dotted' ? 'bg-emerald-700 text-white shadow' : 'bg-white/70 text-slate-700'}`}
                 title="ডটেড দাগ — তৈরি প্লটের এক কিনারা থেকে আরেক কিনারায় টানুন"
               >
-                <span className="block w-[3px] h-[14px] border-l-[3px] border-dotted border-current" />
+                <span className="block w-[3px] h-[16px] border-l-[3px] border-dotted border-current" />
                 <span>ডটেড দাগ</span>
               </button>
             </div>
 
             {/* রঙের তালিকা বন্ধ থাকে; রঙের আইকনে ট্যাপ করলে খোলে */}
             {colorsOpen && (
-              <div className="grid grid-cols-8 gap-0.5 pt-0.5">
+              <div className="grid grid-cols-4 gap-1 pt-0.5">
                 {COLORS.map((c) => (
                   <button
                     key={c}
@@ -1099,10 +1100,11 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
                       // recolor the selected line too, and any label on it, so the change is visible at once
                       if (sel) updateSegment(sel.id, { color: c });
                     }}
-                    className={`h-4 rounded-full shadow-sm ${activeColor === c ? 'ring-2 ring-slate-900 ring-offset-1' : 'border border-white'}`}
-                    style={{ background: c }}
+                    className={`h-11 rounded-xl flex items-center justify-center ${activeColor === c ? 'ring-2 ring-slate-900 bg-slate-100' : 'bg-white/70'}`}
                     aria-label={c}
-                  />
+                  >
+                    <span className="w-6 h-6 rounded-full border border-white shadow-sm" style={{ background: c }} />
+                  </button>
                 ))}
               </div>
             )}
@@ -1136,13 +1138,21 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
 
-        {/* north indicator — on the canvas, top-right */}
+        {/* north indicator — on the canvas, top-right (৪৮px-এর কাছাকাছি ট্যাপ-আকার) */}
         <g>
-          <circle cx={W - 22} cy={26} r={14} fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.2" />
-          <line x1={W - 22} y1={35} x2={W - 22} y2={17} stroke="#0f172a" strokeWidth="1.6" strokeLinecap="round" />
-          <path d={`M ${W - 26} 21 L ${W - 22} 13 L ${W - 18} 21 Z`} fill="#0f172a" />
-          <text x={W - 22} y={31} fontSize="7" textAnchor="middle" fill="#0f172a" fontWeight="700">N</text>
+          <circle cx={W - 28} cy={32} r={20} fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.2" />
+          <line x1={W - 28} y1={44} x2={W - 28} y2={20} stroke="#0f172a" strokeWidth="2" strokeLinecap="round" />
+          <path d={`M ${W - 33} 27 L ${W - 28} 16 L ${W - 23} 27 Z`} fill="#0f172a" />
+          <text x={W - 28} y={40} fontSize="10" textAnchor="middle" fill="#0f172a" fontWeight="700">N</text>
         </g>
+
+        {/* খালি ক্যানভাসে নির্দেশনা — আঁকা শুরু হলে নিজে থেকে চলে যায় */}
+        {segments.length === 0 && !draft && (
+          <g>
+            <text x={W / 2} y={viewH / 2 - 8} fontSize="16" textAnchor="middle" fill="#94a3b8" fontWeight="700">প্রথম বিন্দুতে ট্যাপ করুন</text>
+            <text x={W / 2} y={viewH / 2 + 14} fontSize="13" textAnchor="middle" fill="#cbd5e1" fontWeight="600">ট্যাপ করে করে প্লটের কোণা বসান</text>
+          </g>
+        )}
 
         {polygonsMemo.map((poly)=>{
           const meta=plotMeta(poly.id);
@@ -1350,7 +1360,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
                 <button key={st} onClick={()=> setPlotMeta(menu.id,{style:st})}
                   className={`h-7 px-1.5 rounded-md text-[9px] font-semibold border ${(m.style||'box')===st ? 'bg-slate-900 text-white border-slate-900':'bg-white text-slate-600 border-slate-300'}`}>{st==='plain'?'নেই':st==='box'?'বক্স':'ভরা'}</button>
               ))}
-              <span className="text-[9px] font-semibold text-slate-500 pl-1">রঙ</span>
+              <span className="text-xs font-semibold text-slate-500 pl-1">রঙ</span>
               <div className="flex items-center gap-0.5 overflow-x-auto">
                 {COLORS.map(c=>(
                   <button key={c} onClick={()=> setPlotMeta(menu.id,{color:c})}
@@ -1358,7 +1368,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
                 ))}
               </div>
             </div>
-            <div className="text-[9px] text-slate-500 pt-1 leading-snug">ভেতরে ট্যাপ = রঙ · কার্ড টানুন = সরানো</div>
+            <div className="text-xs text-slate-500 pt-1 leading-snug">ভেতরে ট্যাপ = রঙ · কার্ড টানুন = সরানো</div>
           </div>
         );
       })()}

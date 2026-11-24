@@ -131,11 +131,11 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
         </div>
         <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
           <div>
-            <small className="block text-xs font-bold text-slate-500 leading-tight">ইংরেজি</small>
+            <small className="block text-[15px] font-bold text-slate-500 leading-tight">ইংরেজি</small>
             <b className="block text-[15px] font-extrabold text-slate-900 leading-snug">{dt.en}</b>
           </div>
           <div>
-            <small className="block text-xs font-bold text-slate-500 leading-tight">বাংলা</small>
+            <small className="block text-[15px] font-bold text-slate-500 leading-tight">বাংলা</small>
             <b className="block text-[15px] font-extrabold text-slate-900 leading-snug">{dt.bn}</b>
           </div>
           <span className="self-start text-[13px] font-bold text-amber-800 bg-amber-100 rounded-full px-2.5 py-px">{dt.season}</span>
@@ -150,7 +150,7 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
           { n: stats.reports, t: 'মোট রিপোর্ট', c: TONE[2] },
         ].map((x) => (
           <div key={x.t} className="bg-white rounded-[22px] py-2.5 px-1.5 text-center shadow-[0_2px_10px_rgba(15,23,42,.05)]">
-            <b className={`inline-flex items-center justify-center min-w-[46px] h-[46px] px-2 rounded-2xl text-2xl font-extrabold ${x.c}`}>
+            <b className={`inline-flex items-center justify-center min-w-[56px] h-[56px] px-2 rounded-2xl text-[34px] font-extrabold ${x.c}`}>
               {toBnDigits(x.n)}
             </b>
             <span className="block text-[13px] font-bold text-slate-700 mt-1 leading-tight">{x.t}</span>
@@ -243,7 +243,7 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
         <button
           id="home-tile-measure"
           onClick={onOpenMeasure}
-          className="col-span-2 bg-white rounded-[30px] p-[18px] text-left flex items-center gap-3 min-h-[150px] shadow-[0_4px_14px_rgba(15,23,42,.06)] active:scale-[.97] transition"
+          className="col-span-2 bg-white rounded-[30px] p-4 text-left flex items-center gap-3 min-h-[120px] shadow-[0_4px_14px_rgba(15,23,42,.06)] active:scale-[.97] transition"
         >
           <span className="w-[88px] h-[88px] shrink-0 rounded-[28px] bg-emerald-100 text-emerald-800 flex items-center justify-center">
             <Compass className="w-12 h-12" />
@@ -259,7 +259,7 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
         <button
           id="home-tile-handmap"
           onClick={onOpenHandMap}
-          className="bg-white rounded-[30px] p-[18px] text-left flex flex-col gap-3 min-h-[170px] shadow-[0_4px_14px_rgba(15,23,42,.06)] active:scale-[.97] transition"
+          className="bg-white rounded-[30px] p-4 text-left flex flex-col gap-2 min-h-[140px] shadow-[0_4px_14px_rgba(15,23,42,.06)] active:scale-[.97] transition"
         >
           <span className="w-[72px] h-[72px] rounded-3xl bg-sky-100 text-sky-700 flex items-center justify-center">
             <Spline className="w-10 h-10" />
@@ -272,7 +272,7 @@ export const FieldHomeScreen: React.FC<Props> = ({ surveys, onOpenMeasure, onOpe
         <button
           id="home-tile-reports"
           onClick={onOpenReports}
-          className="bg-white rounded-[30px] p-[18px] text-left flex flex-col gap-3 min-h-[170px] shadow-[0_4px_14px_rgba(15,23,42,.06)] active:scale-[.97] transition"
+          className="bg-white rounded-[30px] p-4 text-left flex flex-col gap-2 min-h-[140px] shadow-[0_4px_14px_rgba(15,23,42,.06)] active:scale-[.97] transition"
         >
           <span className="w-[72px] h-[72px] rounded-3xl bg-violet-100 text-violet-700 flex items-center justify-center">
             <FileText className="w-10 h-10" />

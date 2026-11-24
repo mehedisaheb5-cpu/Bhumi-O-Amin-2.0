@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { Language, NavTab, SurveyRecord } from './types';
 import { initialSurveys } from './data/mockData';
 import { Header } from './components/Header';
@@ -29,14 +29,14 @@ import { FieldHomeScreen } from './components/fieldamin/FieldHomeScreen';
  * (ধাপ ৭-এর শিক্ষা: রিপোর্ট/এডমিন কোড স্টার্টআপ গ্রাফে ঢুকলে circular chunk হয়ে
  * অ্যাপ সাদা হয়ে গিয়েছিল। এই import() শুধু এডমিন খুললেই লোড হয়।)
  */
-const AdminScreen = lazy(() => import('./components/admin/AdminScreen'));
+const AdminScreen = lazyWithRetry(() => import('./components/admin/AdminScreen'));
 
 /**
  * ধাপ ৯ — প্রোফাইল ও ক্যালেন্ডার আলাদা chunk-এ lazy-load হয়, স্টার্টআপের module গ্রাফে থাকে না।
  * (ধাপ ৮-এর এডমিনের মতোই — ধাপ ৭-এর শিক্ষা।)
  */
-const OwnerProfileScreen = lazy(() => import('./components/profile/OwnerProfileScreen'));
-const WorkCalendarScreen = lazy(() => import('./components/profile/WorkCalendarScreen'));
+const OwnerProfileScreen = lazyWithRetry(() => import('./components/profile/OwnerProfileScreen'));
+const WorkCalendarScreen = lazyWithRetry(() => import('./components/profile/WorkCalendarScreen'));
 
 /**
  * ফিল্ড আমিন: পুরোনো অ্যাপের হোম (খতিয়ান, উত্তরাধিকার, দলিল, মৌজা ম্যাপ, AI চ্যাট কার্ড) লুকানো।
@@ -48,6 +48,7 @@ const SHOW_LEGACY_MAP_LINKS = false;
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { lazyWithRetry } from './lib/lazyWithRetry';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { enqueue, syncQueue } from './lib/offlineQueue';
 import {
@@ -528,7 +529,7 @@ export default function App() {
       <ErrorBoundary>
       <main
         className={`flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-6 print:max-w-none print:px-0 print:pt-0 print:pb-0 ${
-          currentScreen.screenId === 'survey' ? 'pt-2 pb-2 overflow-hidden' : 'pt-3.5 pb-28'
+          currentScreen.screenId === 'survey' ? 'pt-2 pb-2 overflow-hidden' : 'pt-3.5 pb-36'
         }`}
       >
         {/* 1. HOME SCREEN — P1 Mobile: 5 cards (দখল / ম্যাপ 3 / খতিয়ান / উত্তরাধিকার / দলিল) */}

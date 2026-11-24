@@ -588,7 +588,7 @@ export const SurveyScreen: React.FC<SurveyScreenProps> = ({
   };
 
   return (
-    <div id="gps-survey-screen" className={`${activeTab === 'drawing_based' ? 'space-y-1 pb-1' : 'space-y-4 pb-12'} animate-fadeIn`}>
+    <div id="gps-survey-screen" className={`${activeTab === 'drawing_based' ? 'space-y-1 pb-1' : 'space-y-4 pb-32'} animate-fadeIn`}>
       {/* Linked Booking Indicator Banner */}
       {linkedBooking && (
         <div className="p-3 rounded-2xl bg-teal-50 border border-teal-200 text-teal-950 flex items-center justify-between gap-3 text-xs">

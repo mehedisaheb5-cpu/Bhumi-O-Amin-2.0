@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarDays } from 'lucide-react';
 import { Language, SurveyRecord } from '../../types';
 import { toBnDigits } from '../../lib/banglaDate';
 import {
@@ -35,6 +36,12 @@ interface Props {
 
 const G = '#065f46';
 const bn = (v: string | number) => toBnDigits(v);
+/** "2026-11-24" (ISO) → "২৪/১১/২০২৬" — তারিখের ঘরে বাংলা সংখ্যায় দেখানো হয় */
+const bnDate = (iso: string) => {
+  const m = iso.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (!m) return '';
+  return `${toBnDigits(m[3].padStart(2, '0'))}/${toBnDigits(m[2].padStart(2, '0'))}/${toBnDigits(m[1])}`;
+};
 const fix = (v: number, d = 2) => bn((Math.round(v * 10 ** d) / 10 ** d).toFixed(d));
 
 const SIDES: { k: Exclude<SideKey, 'd'>; short: string; name: string }[] = [
@@ -155,17 +162,41 @@ const Field: React.FC<{
       {label}
       {required && <span className="text-rose-600"> *</span>}
     </span>
-    <input
-      id={id}
-      type={type}
-      inputMode={inputMode}
-      value={value}
-      placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
-      className={`w-full min-h-[52px] rounded-xl border-2 px-3 text-[17px] font-semibold bg-white outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100 ${
-        error ? 'border-rose-400' : 'border-slate-300'
-      }`}
-    />
+    {type === 'date' ? (
+      // তারিখ: নেটিভ date input লাতিন সংখ্যায় "11/24/2026" দেখায় বলে
+      // ওপরে বাংলা লেখা দেখানো হয়; নিচের স্বচ্ছ input-এ ট্যাপ করলে
+      // ফোনের নিজের তারিখ-পিকার খোলে। মান ISO (YYYY-MM-DD) হিসেবে থাকে।
+      <span className="relative block">
+        <span
+          className={`flex w-full min-h-[52px] rounded-xl border-2 px-3 items-center gap-2 text-[17px] font-semibold bg-white ${
+            error ? 'border-rose-400' : 'border-slate-300'
+          }`}
+        >
+          <CalendarDays className="w-5 h-5 text-[#065f46] shrink-0" />
+          <span className="flex-1 text-left truncate">{value ? bnDate(value) : 'তারিখ বাছুন'}</span>
+        </span>
+        <input
+          id={id}
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </span>
+    ) : (
+      <input
+        id={id}
+        type={type}
+        inputMode={inputMode}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full min-h-[52px] rounded-xl border-2 px-3 text-[17px] font-semibold bg-white outline-none focus:border-emerald-700 focus:ring-4 focus:ring-emerald-100 ${
+          error ? 'border-rose-400' : 'border-slate-300'
+        }`}
+      />
+    )}
     {error && <span className="block text-sm font-bold text-rose-700 mt-1">{error}</span>}
   </label>
 );

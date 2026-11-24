@@ -55,6 +55,8 @@ import { telHref } from '../../lib/profileStore';
 type View = 'week' | 'agenda' | 'month';
 
 const WEEKDAYS = ['শনি', 'রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহস্পতি', 'শুক্র'];
+/** সপ্তাহের স্ট্রিপের ছোট নাম — ৩৬০px-এ ৭ দিন আঁটাতে "বৃহস্পতি" → "বৃহঃ" */
+const WEEKDAYS_SHORT = ['শনি', 'রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র'];
 const MONTHS = [
   'জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন',
   'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর',
@@ -482,16 +484,18 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
       {view === 'week' && (
         <>
           <div className="flex items-center gap-1.5">
+            {/* আগের/পরের সপ্তাহের তীর — ফোনে লুকানো, যাতে ৭ দিনের জায়গা হয়;
+                স্ট্রিপ আঙুলে টেনে স্ক্রল করা যায় (১৪ দিন)। বড় পর্দায় তীর থাকে। */}
             <button
               onClick={() => setWk(addDaysStr(wk, -7))}
               aria-label="আগের সপ্তাহ"
-              className="w-12 h-12 shrink-0 rounded-2xl bg-white border border-slate-200 flex items-center justify-center active:scale-95 transition"
+              className="hidden sm:flex w-12 h-12 shrink-0 rounded-2xl bg-white border border-slate-200 items-center justify-center active:scale-95 transition"
             >
               <ChevronLeft className="w-6 h-6" />
             </button>
             <div
               ref={stripRef}
-              className="flex-1 min-w-0 flex gap-2 overflow-x-auto snap-x snap-mandatory scroll-smooth py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="flex-1 min-w-0 flex gap-1 overflow-x-auto snap-x snap-mandatory scroll-smooth py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
               {weekDays.map((d) => {
@@ -503,7 +507,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
                     data-day={d}
                     onClick={() => pickDate(d)}
                     aria-disabled={d === today && !todayBookable}
-                    className={`shrink-0 w-[54px] snap-center rounded-2xl py-2 px-0.5 text-center min-h-[64px] active:scale-95 transition ${
+                    className={`shrink-0 w-[44px] snap-start rounded-2xl py-2 px-0 text-center min-h-[64px] active:scale-95 transition ${
                       d === sel
                         ? 'bg-[#065f46] text-white'
                         : d === today && !todayBookable
@@ -513,7 +517,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
                             : 'bg-white border border-slate-200'
                     }`}
                   >
-                    <small className="block text-[12px] font-normal">{WEEKDAYS[(dd.getDay() + 1) % 7]}</small>
+                    <small className="block text-[11px] font-normal leading-tight">{WEEKDAYS_SHORT[(dd.getDay() + 1) % 7]}</small>
                     <b className="block text-lg font-bold leading-tight">{toBnDigits(dd.getDate())}</b>
                     {c > 0 && (
                       <i className={`block text-[11px] font-bold not-italic ${d === sel ? 'text-[#fde68a]' : d === today && !todayBookable ? 'text-slate-400' : 'text-[#065f46]'}`}>
@@ -527,7 +531,7 @@ export const WorkCalendarScreen: React.FC<{ onBack: () => void }> = ({ onBack })
             <button
               onClick={() => setWk(addDaysStr(wk, 7))}
               aria-label="পরের সপ্তাহ"
-              className="w-12 h-12 shrink-0 rounded-2xl bg-white border border-slate-200 flex items-center justify-center active:scale-95 transition"
+              className="hidden sm:flex w-12 h-12 shrink-0 rounded-2xl bg-white border border-slate-200 items-center justify-center active:scale-95 transition"
             >
               <ChevronRight className="w-6 h-6" />
             </button>

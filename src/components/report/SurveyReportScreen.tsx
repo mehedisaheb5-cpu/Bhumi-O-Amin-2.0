@@ -163,7 +163,9 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   // Screen preview zoom factor for responsive inspection
-  const [zoomLevel, setZoomLevel] = useState<'fit' | '100%'>('fit');
+  // ডিফল্ট '100%' — ফোনে A4 ছোট করে (fit) দেখালে লেখা ~৭-৯px হয়ে পড়া যায় না;
+  // ১০০%-এ পাশে স্ক্রল করে পড়া যায়। 'স্ক্রিন ফিট'-এ গেলে আগের মতো ছোট দেখাবে।
+  const [zoomLevel, setZoomLevel] = useState<'fit' | '100%'>('100%');
 
   // Share toast
   const [shareMsg, setShareMsg] = useState<string | null>(null);
@@ -372,7 +374,7 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
 
             <div>
               <h1 className="text-sm sm:text-base font-black text-slate-900 leading-tight flex items-center gap-1.5">
-                <FileText className="w-4 h-4 text-violet-800" />
+                <FileText className="w-4 h-4 text-[#065f46]" />
                 <span>{isBn ? 'সার্ভে রিপোর্ট ও পিডিএফ' : 'Survey Report & PDF'}</span>
               </h1>
               <p className="text-[10px] text-slate-500 hidden sm:block">
@@ -389,11 +391,11 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
               onClick={() => setActiveTab('preview')}
               className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
                 activeTab === 'preview'
-                  ? 'bg-white text-violet-950 shadow-2xs'
+                  ? 'bg-white text-[#065f46] shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <FileText className="w-3.5 h-3.5 text-violet-800" />
+              <FileText className="w-3.5 h-3.5 text-[#065f46]" />
               <span>{isBn ? 'রিপোর্ট প্রিভিউ' : 'Preview'}</span>
             </button>
 
@@ -401,14 +403,14 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
               onClick={() => setActiveTab('list')}
               className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
                 activeTab === 'list'
-                  ? 'bg-white text-violet-950 shadow-2xs'
+                  ? 'bg-white text-[#065f46] shadow-2xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              <FolderOpen className="w-3.5 h-3.5 text-violet-800" />
+              <FolderOpen className="w-3.5 h-3.5 text-[#065f46]" />
               <span>{isBn ? 'সংরক্ষিত' : 'Saved'}</span>
               {savedReports.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full bg-violet-100 text-violet-800 text-[10px] font-mono font-bold">
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-900 text-[10px] font-mono font-bold">
                   {savedReports.length}
                 </span>
               )}
@@ -420,16 +422,16 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
         {activeTab === 'preview' && (
           <div className="bg-slate-50 border-t border-slate-200/90 px-3 sm:px-4 py-2">
             <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
-              {/* Survey Selector */}
+              {/* Survey Selector — পুরো চওড়া, যাতে লম্বা নাম কাটা না যায় */}
               {surveys.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <label className="text-xs font-bold text-slate-600 hidden md:inline">
+                <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                  <label className="text-xs font-bold text-slate-600 hidden md:inline shrink-0">
                     {isBn ? 'সার্ভে নির্বাচন:' : 'Select Survey:'}
                   </label>
                   <select
                     value={selectedSurveyId}
                     onChange={(e) => handleSelectSurveyChange(e.target.value)}
-                    className="py-1 px-2.5 bg-white rounded-xl border border-slate-300 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-violet-700 max-w-[210px] sm:max-w-xs truncate"
+                    className="py-2 px-2.5 bg-white rounded-xl border border-slate-300 text-[15px] font-semibold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-[#065f46] w-full min-w-0"
                   >
                     {surveys.map((s) => (
                       <option key={s.id} value={s.id}>
@@ -464,14 +466,14 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
                       onClick={handleToggleStatus}
                       className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 shadow-2xs active:scale-95 ${
                         currentReport.status === 'final'
-                          ? 'bg-violet-50 border-violet-300 text-violet-900 hover:bg-violet-100'
+                          ? 'bg-emerald-50 border-emerald-300 text-emerald-900 hover:bg-emerald-100'
                           : 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
                       }`}
                       title={isBn ? 'স্ট্যাটাস পরিবর্তন করুন' : 'Toggle Status'}
                     >
                       {currentReport.status === 'final' ? (
                         <>
-                          <CheckCircle className="w-3.5 h-3.5 text-violet-700" />
+                          <CheckCircle className="w-3.5 h-3.5 text-[#065f46]" />
                           <span>{isBn ? 'চূড়ান্ত অনুমোদন' : 'Final Report'}</span>
                         </>
                       ) : (
@@ -482,12 +484,12 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
                       )}
                     </button>
 
-                    {/* Save Report to localStorage */}
+                    {/* Save Report to localStorage — সবুজ থিম */}
                     <button
                       onClick={handleSaveReport}
-                      className="px-3 py-1.5 rounded-xl bg-violet-800 text-white hover:bg-violet-900 text-xs font-bold transition flex items-center gap-1.5 shadow-xs active:scale-95"
+                      className="px-3 py-1.5 rounded-xl bg-[#065f46] text-white hover:bg-[#054a37] text-xs font-bold transition flex items-center gap-1.5 shadow-xs active:scale-95"
                     >
-                      <Save className="w-3.5 h-3.5 text-amber-300" />
+                      <Save className="w-3.5 h-3.5 text-[#fde68a]" />
                       <span>{isBn ? 'সংরক্ষণ' : 'Save'}</span>
                     </button>
 
@@ -501,12 +503,13 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
                       <span>{isBn ? 'শেয়ার' : 'Share'}</span>
                     </button>
 
-                    {/* Print / Save to PDF */}
+                    {/* Print / Save to PDF — সোনালি থিম (একটাই বোতাম; ডকুমেন্টের ভেতরের
+                        ডুপ্লিকেট বোতামটি নিচের <style> দিয়ে লুকানো — ReportDocumentA4 ছোঁয়া হয়নি) */}
                     <button
                       onClick={handlePrint}
-                      className="px-3.5 py-1.5 rounded-xl bg-violet-900 text-white hover:bg-violet-950 text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
+                      className="px-3.5 py-1.5 rounded-xl bg-gradient-to-br from-amber-200 to-amber-500 text-amber-950 hover:from-amber-300 hover:to-amber-600 text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95"
                     >
-                      <Printer className="w-3.5 h-3.5 text-amber-300" />
+                      <Printer className="w-3.5 h-3.5 text-amber-900" />
                       <span>{isBn ? 'প্রিন্ট / PDF' : 'Print / PDF'}</span>
                     </button>
                   </>
@@ -518,8 +521,8 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
 
         {/* Save Toast Notification */}
         {saveSuccessMsg && (
-          <div className="bg-violet-900 text-white text-xs font-semibold py-2 px-4 text-center flex items-center justify-center gap-2 animate-fadeIn shadow-inner">
-            <Check className="w-4 h-4 text-amber-300" />
+          <div className="bg-[#065f46] text-white text-[15px] font-semibold py-2 px-4 text-center flex items-center justify-center gap-2 animate-fadeIn shadow-inner">
+            <Check className="w-4 h-4 text-[#fde68a]" />
             <span>{saveSuccessMsg}</span>
           </div>
         )}
@@ -608,10 +611,10 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
               /* Case 3: Valid Survey & Report Ready */
               <div className="space-y-4">
                 {/* Print Guidance Note Bar */}
-                <div className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl border border-slate-200 text-xs shadow-xs print:hidden">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Info className="w-4 h-4 text-emerald-800 shrink-0" />
-                    <span className="text-[11px]">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-white rounded-xl border border-slate-200 shadow-xs print:hidden">
+                  <div className="flex items-center gap-2 text-slate-600 min-w-0 flex-1">
+                    <Info className="w-5 h-5 text-emerald-800 shrink-0" />
+                    <span className="text-[15px] font-semibold leading-snug">
                       {isBn
                         ? 'পিডিএফ ডাউনলোড করতে উপরের "প্রিন্ট / PDF" বাটনে চাপ দিন এবং ডেস্টিনেশন "Save as PDF" নির্বাচন করুন।'
                         : 'To download as PDF, click "Print / PDF" and select "Save as PDF" as the destination.'}
@@ -621,7 +624,7 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
                   <div className="flex items-center gap-1 shrink-0 text-slate-500">
                     <button
                       onClick={() => setZoomLevel(zoomLevel === 'fit' ? '100%' : 'fit')}
-                      className="px-2.5 py-1 rounded-lg border border-slate-200 text-[11px] font-bold hover:bg-slate-50 transition"
+                      className="min-h-[48px] px-4 rounded-xl border-[1.5px] border-[#065f46] text-[15px] font-bold text-[#065f46] hover:bg-emerald-50 transition active:scale-95"
                       title={isBn ? 'জুম পরিবর্তন' : 'Toggle Zoom'}
                     >
                       {zoomLevel === 'fit' ? (isBn ? '১০০% সাইজ' : '100% Size') : (isBn ? 'স্ক্রিন ফিট' : 'Fit Screen')}
@@ -629,10 +632,22 @@ export const SurveyReportScreen: React.FC<SurveyReportScreenProps> = ({
                   </div>
                 </div>
 
+                {/* ভিউয়ার-স্তরের CSS — ReportDocumentA4.tsx ফাইলে হাত না দিয়ে:
+                    ১০০% মোডে A4-কে আসল সাইজে দেখানো (ডকুমেন্ট নিজে ফোনে ছোট করে
+                    zoom করে; !important দিয়ে ওভাররাইড), আর ডকুমেন্টের ভেতরের
+                    ডুপ্লিকেট "প্রিন্ট / PDF" বোতাম লুকানো (টুলবারেরটাই থাকবে)।
+                    সতর্কতা: ১০০% মোডে পাতার নকশার কোণা টেনে ছোট-বড় করলে হিসাব
+                    একটু বেশি সরে — নকশা এডিট করতে "স্ক্রিন ফিট"-এ যান। */}
+                <style>{`
+                  .report-zoom-100 #report-printable-area { zoom: 1 !important; }
+                  .report-zoom-100 .report-a4-wrap { overflow-x: auto !important; justify-content: flex-start !important; }
+                  #report-printable-area .print-hidden > span > button:first-of-type { display: none !important; }
+                `}</style>
+
                 {/* A4 Paper Document Container */}
                 <div
                   className={`w-full overflow-x-auto pb-8 print:p-0 print:overflow-visible ${
-                    zoomLevel === 'fit' ? 'flex justify-center' : 'block'
+                    zoomLevel === 'fit' ? 'flex justify-center' : 'report-zoom-100 block'
                   }`}
                 >
                   <ReportDocumentA4 report={currentReport} lang={lang} />

@@ -11,16 +11,17 @@ interface BottomNavProps {
 /**
  * ফিল্ড আমিন — নিচের বার: ডিজাইন C-এর ভাসমান পিল (design-previews/01-home.html)
  * ৪টা ট্যাব: হোম · দখল পরিমাপ · কনভার্টার · রিপোর্ট।
- * চালু ট্যাব চওড়া সবুজ পিল হয়ে নাম দেখায়; বাকিগুলো বড় আইকন।
+ * সব আইকনের নিচে নাম থাকে (আগে শুধু চালু ট্যাবে নাম দেখা যেত);
+ * চালু ট্যাব সবুজ পিল হয়।
  */
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, lang }) => {
   const isBn = lang === 'bn';
 
   const navItems: Array<{ id: NavTab; label: string; icon: React.ReactNode }> = [
-    { id: 'home', label: isBn ? 'হোম' : 'Home', icon: <House className="w-[26px] h-[26px]" /> },
-    { id: 'possession', label: isBn ? 'দখল পরিমাপ' : 'Measure', icon: <Compass className="w-[26px] h-[26px]" /> },
-    { id: 'converter', label: isBn ? 'কনভার্টার' : 'Converter', icon: <ArrowLeftRight className="w-[26px] h-[26px]" /> },
-    { id: 'reports', label: isBn ? 'রিপোর্ট' : 'Reports', icon: <FileText className="w-[26px] h-[26px]" /> },
+    { id: 'home', label: isBn ? 'হোম' : 'Home', icon: <House className="w-6 h-6" /> },
+    { id: 'possession', label: isBn ? 'দখল পরিমাপ' : 'Measure', icon: <Compass className="w-6 h-6" /> },
+    { id: 'converter', label: isBn ? 'কনভার্টার' : 'Converter', icon: <ArrowLeftRight className="w-6 h-6" /> },
+    { id: 'reports', label: isBn ? 'রিপোর্ট' : 'Reports', icon: <FileText className="w-6 h-6" /> },
   ];
 
   return (
@@ -40,13 +41,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, l
               onClick={() => onSelectTab(item.id)}
               aria-label={item.label}
               aria-current={isActive ? 'page' : undefined}
-              style={{ flexGrow: isActive ? 2.2 : 1, flexBasis: 0 }}
-              className={`flex items-center justify-center gap-1.5 min-h-[56px] rounded-full font-extrabold text-[15px] whitespace-nowrap transition-all duration-200 active:scale-95 ${
-                isActive ? 'bg-[#065f46] text-white px-3' : 'text-slate-600'
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-h-[56px] min-w-0 rounded-full font-extrabold whitespace-nowrap transition-all duration-200 active:scale-95 ${
+                isActive ? 'bg-[#065f46] text-white px-1' : 'text-slate-600'
               }`}
             >
               {item.icon}
-              {isActive && <span>{item.label}</span>}
+              <span className="text-[12px] leading-none truncate max-w-full px-0.5">{item.label}</span>
             </button>
           );
         })}
