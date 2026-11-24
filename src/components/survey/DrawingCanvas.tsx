@@ -17,6 +17,10 @@ const MIN_LEN_PX = 16;    // shorter than this is a tap, not a new line
 const MIN_MOVE = 9;       // screen px before a press becomes a drag
 const ANGLE_STEP = 45;
 const ANGLE_TOL = 10;
+// নিচে টেনে মোছা (২৫ নভেম্বর Founder: কনফার্ম উইন্ডো বন্ধ করো — দাগ নিচে
+// টানলে চুম্বকের মতো মুছার পটিতে বসে মুছে যাবে)
+const DELETE_STRIP_H = 56;  // screen px: মুছার পটির উচ্চতা
+const DELETE_SNAP_PX = 40;  // screen px: পটির ওপরে এই দূরত্বে গেলেই চুম্বক লাগে
 
 const STORAGE_KEY = 'bhumi_possession_drawing_v1';
 
@@ -76,6 +80,11 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   const [segments, setSegments] = useState<Seg[]>([]);
   const [restored, setRestored] = useState(false);
   const [redoStack, setRedoStack] = useState<Seg[]>([]);
+  /** মুছে ফেলা দাগ — ↶ ফেরান চাপলে এখান থেকে ফিরে আসে (কনফার্ম উইন্ডোর
+      বদলে এটাই সুরক্ষা: ভুলে মুছলে ফেরানেই ফেরত পাওয়া যায়) */
+  const [deletedStack, setDeletedStack] = useState<Seg[]>([]);
+  /** নিচে টেনে মোছার পটি — দাগ নিচের দিকে টানলেই দেখা যায় */
+  const [deleteZone, setDeleteZone] = useState<{ active: boolean; hot: boolean }>({ active: false, hot: false });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu>(null);
   const [draft, setDraft] = useState<{ x1: number; y1: number; x2: number; y2: number; snapped: boolean } | null>(null);
@@ -103,6 +112,12 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   const wrapperRef = useRef<HTMLDivElement>(null);
   const feetRef = useRef<HTMLInputElement>(null);
   const lastSnapRef = useRef(false);
+  /** মুছার পটি গরম কি না (ছাড়লে মুছবে) — handleUp-এ তাজা মান লাগে */
+  const deleteHotRef = useRef(false);
+  /** পটিতে ঢোকার সময় একবার ভাইব্রেট — বারবার নয় */
+  const deleteSnapRef = useRef(false);
+  /** deleteZone state-এর আয়না — প্রতি move-এ অকারণ রি-রেন্ডার ঠেকাতে */
+  const deleteZoneRef = useRef({ active: false, hot: false });
   const toolbarDrag = useRef<{ dx: number; dy: number } | null>(null);
   const press = useRef<
     | { kind: 'none' }
@@ -464,7 +479,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   const updateSegment = (id: string, patch: Partial<Seg>) =>
     setSegments((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   /* একটা দাগ মুছুন — লক প্লটের দাগ হলে আনলকের হিন্ট (মান বদলানোর মতোই);
-     কনফার্ম করে মুছলে ↷ দিয়ে ফেরানো যায়; প্লটের হিসাব নিজে থেকে বদলায়। */
+     কনফার্ম উইন্ডো নেই (২৫ নভেম্বর Founder: বারবার একই ওয়ার্নিং বন্ধ করো) —
+     সাথে সাথে মুছে যায়; ↶ ফেরান (বা ↷ আবার) চাপলে দাগটা ফিরে আসে।
+     প্লটের হিসাব নিজে থেকে বদলায়। */
   const deleteSegment = (id: string) => {
     const seg = segments.find((s) => s.id === id);
     if (!seg) return;
@@ -473,13 +490,23 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       window.setTimeout(() => setHint(null), 3000);
       return;
     }
-    if (!window.confirm('এই দাগটা মুছবেন? শুধু এই দাগটাই মুছবে।')) return;
     setSegments((prev) => prev.filter((s) => s.id !== id));
     setRedoStack((prev) => [...prev, seg]);
+    setDeletedStack((prev) => [...prev, seg]);
     setSelectedId((cur) => (cur === id ? null : cur));
     setMenu(null);
   };
   const undo = () => {
+    // সবার আগে মুছে ফেলা দাগ ফেরানো — ভুলে মুছলে ↶ চাপলেই ফিরে আসে;
+    // একই দাগ যেন ↷-তেও না থাকে (দুইবার ফেরত = নকল দাগ)
+    if (deletedStack.length) {
+      const stack = [...deletedStack];
+      const back = stack.pop()!;
+      setDeletedStack(stack);
+      setRedoStack((prev) => prev.filter((s) => s.id !== back.id));
+      setSegments((prev) => (prev.some((s) => s.id === back.id) ? prev : [...prev, back]));
+      return;
+    }
     if (!segments.length) return;
     const s = [...segments];
     const last = s.pop()!;
@@ -491,8 +518,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     if (!redoStack.length) return;
     const r = [...redoStack];
     const next = r.pop()!;
-    setSegments([...segments, next]);
     setRedoStack(r);
+    setDeletedStack((prev) => prev.filter((s) => s.id !== next.id));
+    setSegments((prev) => (prev.some((s) => s.id === next.id) ? prev : [...prev, next]));
   };
 
   /** chain of touching lines = one plot */
@@ -625,6 +653,24 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     }
     if(done) window.setTimeout(()=> setHint(null),3500);
     else { setHint('সব প্লট ইতিমধ্যে সম্পন্ন ✓'); window.setTimeout(()=> setHint(null),2000); }
+  };
+
+  /* ---------------- নিচে টেনে মোছা (২৫ নভেম্বর) ----------------
+     মুছার পটি ক্যানভাসের নিচে (মোট বারের ঠিক ওপরে) বসে — রেন্ডারে যে
+     bottom বসে ঠিক সেটাই এখানে হিসাব করা হয়, যাতে চুম্বকের জায়গা মেলে।
+     মোট বার থাকলে পটি তার ওপরে (৪৬px), না থাকলে নিচে (৮px)। */
+  const deleteStripGeom = () => {
+    const wr = wrapperRef.current?.getBoundingClientRect();
+    if (!wr || wr.height <= 0) return null;
+    const bottomOff = totalAreas.length > 0 ? 46 : 8;
+    const top = wr.bottom - bottomOff - DELETE_STRIP_H;
+    return { top, centerY: top + DELETE_STRIP_H / 2 };
+  };
+  const updateDeleteZone = (active: boolean, hot: boolean) => {
+    const cur = deleteZoneRef.current;
+    if (cur.active === active && cur.hot === hot) return;
+    deleteZoneRef.current = { active, hot };
+    setDeleteZone({ active, hot });
   };
 
   /* ---------------- pointer flow ---------------- */
@@ -906,6 +952,28 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       if (snapTo) { dx = snapTo.dx; dy = snapTo.dy; }
       if (snapTo && !lastSnapRef.current) vibrate();
       lastSnapRef.current = !!snapTo;
+      // নিচে টেনে মোছা — দাগ নিচের দিকে টানলেই মুছার পটি দেখা যায়;
+      // পটির কাছে গেলে দাগ চুম্বকের মতো পটির মাঝখানে বসে (শুধু ছবি সরে,
+      // মান বদলায় না); ছাড়লে সাথে সাথে মুছে যায়, উইন্ডো আসে না।
+      // লক দাগ এখানে আসেই না — ওপরে লক হলে আগেই ফেরত গেছে।
+      const geom = deleteStripGeom();
+      const draggingDown = e.clientY > g.sy + 10;
+      let hot = false;
+      if (geom && draggingDown) {
+        hot = e.clientY >= geom.top - DELETE_SNAP_PX;
+        if (hot) {
+          const targetY = toWorld(e.clientX, geom.centerY).y;
+          dy = targetY - (g.pts[1] + g.pts[3]) / 2;
+          if (!deleteSnapRef.current) vibrate();
+          deleteSnapRef.current = true;
+        } else {
+          deleteSnapRef.current = false;
+        }
+      } else {
+        deleteSnapRef.current = false;
+      }
+      updateDeleteZone(draggingDown, hot);
+      deleteHotRef.current = hot;
       updateSegment(g.id, { x1: g.pts[0] + dx, y1: g.pts[1] + dy, x2: g.pts[2] + dx, y2: g.pts[3] + dy });
       return;
     }
@@ -962,6 +1030,11 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
 
   const handleUp = (e?: PointerEvent) => {
     const g = press.current;
+    // নিচে টেনে মোছা — পটি গরম থাকলে ছাড়লেই দাগ মুছে যায় (উইন্ডো নেই);
+    // লক দাগ হলে deleteSegment নিজেই হিন্ট দেয়, মোছে না
+    if (g.kind === 'moveSeg' && g.moved && deleteHotRef.current) {
+      deleteSegment(g.id);
+    }
     if (g.kind === 'endpoint' && e) {
       const seg = segments.find((s) => s.id === g.id);
       if (seg) {
@@ -989,6 +1062,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
           return next;
         });
         setRedoStack([]);
+        // নতুন দাগ আঁকা মানে আগের মোছা ফেরানোর পালা শেষ — নইলে ↶ চাপলে
+        // নতুন দাগ সরার বদলে পুরনো মোছা দাগ ফিরে আসত (ক্রম ঠিক রাখতে)
+        setDeletedStack([]);
         if (dividerTool) {
           setDividerTool(null);
           setHint('নতুন প্লট তৈরি হয়েছে — বিভাজক দাগের মান বসান, খুঁটির ডট দেখুন');
@@ -1009,6 +1085,9 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     }
     press.current = { kind: 'none' };
     lastSnapRef.current = false;
+    updateDeleteZone(false, false);
+    deleteHotRef.current = false;
+    deleteSnapRef.current = false;
     setDraft(null);
     setTapDot(null);          // cleared immediately — no ghost ring left behind
   };
@@ -1135,7 +1214,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         ) : (
           <div className="rounded-xl bg-white/75 backdrop-blur-md border border-slate-300/80 shadow-lg p-0.5">
             <div className="grid grid-cols-4 gap-0.5 w-[12.5rem] text-[10px] font-semibold leading-none">
-              <button onClick={undo} disabled={!segments.length} className="h-11 rounded-lg bg-white/70 text-slate-800 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">↶</span><span>ফেরান</span></button>
+              <button onClick={undo} disabled={!segments.length && !deletedStack.length} className="h-11 rounded-lg bg-white/70 text-slate-800 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">↶</span><span>ফেরান</span></button>
               <button onClick={redo} disabled={!redoStack.length} className="h-11 rounded-lg bg-white/70 text-slate-800 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">↷</span><span>আবার</span></button>
               <button onClick={() => { if (sel) deleteSegment(sel.id); }} disabled={!sel} className="h-11 rounded-lg bg-rose-50/80 text-rose-700 flex flex-col items-center justify-center gap-0.5 disabled:opacity-70 disabled:bg-slate-100"><span className="text-base leading-none">🗑</span><span>মুছুন</span></button>
               <button
@@ -1160,7 +1239,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
                 onClick={() => {
                   if (segments.length && window.confirm('সব দাগ মুছে নতুন করে শুরু করবেন?')) {
                     localStorage.removeItem(STORAGE_KEY);
-                    setSegments([]); setRedoStack([]); setSelectedId(null); setMenu(null); setPlotMetas([]);
+                    setSegments([]); setRedoStack([]); setDeletedStack([]); setSelectedId(null); setMenu(null); setPlotMetas([]);
                   }
                 }}
                 className="h-11 rounded-lg bg-white/70 text-slate-600 flex flex-col items-center justify-center gap-0.5"
@@ -1408,6 +1487,23 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
           </>
         )}
       </svg>
+
+      {/* ---------- নিচে টেনে মোছার পটি — দাগ নিচে টানলেই দেখা যায় ---------- */}
+      {deleteZone.active && (
+        <div
+          className={`absolute left-2 right-2 z-30 h-14 rounded-xl flex items-center justify-center gap-2 shadow-lg pointer-events-none transition-all ${
+            deleteZone.hot
+              ? 'bg-red-600 text-white scale-[1.02] ring-2 ring-red-300'
+              : 'bg-rose-500/95 text-white'
+          }`}
+          style={{ bottom: totalAreas.length > 0 ? 46 : 8 }}
+        >
+          <span className="text-xl leading-none">🗑</span>
+          <span className="text-[15px] font-bold">
+            {deleteZone.hot ? 'ছেড়ে দিন — দাগটা মুছে যাবে' : 'এখানে ছাড়লে মুছে যাবে'}
+          </span>
+        </div>
+      )}
 
       {/* ---------- মোট শতক — সব প্লটের যোগফল, মান বদলালে নিজে থেকে বদলায় ---------- */}
       {totalAreas.length > 0 && (
