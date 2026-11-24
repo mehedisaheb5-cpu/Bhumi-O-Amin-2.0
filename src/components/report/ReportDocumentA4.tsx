@@ -106,7 +106,7 @@ export const ReportDocumentA4: React.FC<Props> = ({ report, lang }) => {
       let nx=-dy/L, ny=dx/L;
       if((mx-cx)*nx+(my-cy)*ny<0){ nx=-nx; ny=-ny; } // বাইরের দিকে
       const off=(useCount.get(k)||0)>1 ? 0 : fs.gap+fs.side*0.55;
-      let ang=Math.atan2(dy,dx)*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180; // উল্টো না হয়
+      let ang=Math.atan2(dy,dx)*180/Math.PI; if(ang>90) ang-=180; if(ang<-90) ang+=180; if(Math.abs(Math.abs(ang)-90)<45) ang=-90; // খাড়া বাহু সব এক দিকে (−90°, নিচ থেকে ওপরে)
       out.push({key:k, x:mx+nx*off, y:my+ny*off, ang, txt:ftInTxt(len), onLine: off===0});
     };
     if(plots.length){
