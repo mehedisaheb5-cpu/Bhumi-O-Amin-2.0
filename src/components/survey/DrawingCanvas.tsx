@@ -131,7 +131,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     | { kind: 'moveSeg'; id: string; sx: number; sy: number; pts: [number, number, number, number]; moved: boolean }
     | { kind: 'endpoint'; id: string; end: 1 | 2 }
     | { kind: 'corner'; heads: { id: string; end: 1 | 2 }[]; sx: number; sy: number; ox: number; oy: number; moved: boolean }
-    | { kind: 'plotMove'; plotId: string; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number }[]; moved: boolean }
+    | { kind: 'plotMove'; plotId: string; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number }[]; moved: boolean; lastDx?: number; lastDy?: number }
     | { kind: 'plotCorner'; plotId: string; corner: { x: number; y: number }; opp: { x: number; y: number }; sx: number; sy: number; orig: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; origAll: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; pts: { x: number; y: number }[]; moved: boolean }
   >({ kind: 'none' });
   /** প্রিভিউ ২০, ঠিক ৭ — হাতে আনলক করা প্লটের রিং id: অটো-লক যেন আবার লক না করে */
@@ -477,8 +477,14 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     return best;
   };
 
-  const vibrate = () => {
-    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
+  /* ভাইব্রেট: Chrome-এ navigator.vibrate()-এ sticky user activation লাগে —
+     টাচে pointerdown-এ সেটা মেলে না, pointerup/click-এ মেলে (আর একবার মিললে
+     পেইজ খোলা থাকা পর্যন্ত থাকে)। তাই টানার মাঝখানে (pointermove) ডাকলে
+     ফোনে না-ও বাজতে পারে — ছাড়ার সময় (pointerup) ডাকলে নিশ্চিত বাজে।
+     স্ন্যাপে বসা/মোছার মতো নিশ্চিত খবরে ২৫ms-এর লম্বা ভাইব্রেট, যাতে
+     ১২ms-এর চিকন টিক মিস না হয়। */
+  const vibrate = (ms: number | number[] = 12) => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(ms);
   };
 
   /* ---------------- mutations ---------------- */
@@ -497,6 +503,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       return;
     }
     setSegments((prev) => prev.filter((s) => s.id !== id));
+    vibrate(20); // মোছার নিশ্চিত খবর — 🗑/পটি, দুই পথেই (click/pointerup-এ বাজে)
     setRedoStack((prev) => [...prev, seg]);
     setDeletedStack((prev) => [...prev, seg]);
     setSelectedId((cur) => (cur === id ? null : cur));
@@ -679,6 +686,99 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     setDeleteZone({ active, hot });
   };
 
+  /* লক প্লটের কোনা টানা — বিপরীত কোনাকে কেন্দ্র করে ঘোরা+বড়-ছোট (মাপ
+     বদলায় না)। ভাগ করা জোড়া ও সরলরেখার ধারাবাহিক দাগ একসাথে সরে, যাতে
+     পাশের প্লটের রিং না ভাঙে (২৪ নভেম্বর রেকর্ডিং: নিচের প্লট আসা-যাওয়া)।
+     টানার সময় লক্ষ্য = আঙুলের জায়গা (চুম্বক নেই — চুম্বক কোনাকে জোড়ায়
+     আটকে রাখত, আঙুল এগোলে ছিটকে যেত); ছাড়ার সময় (handleUp) কাছের
+     জোড়ায় বসে + ভাইব্রেট হয়। */
+  const applyPlotCorner = (
+    g: { corner: { x: number; y: number }; opp: { x: number; y: number }; origAll: { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }[]; pts: { x: number; y: number }[] },
+    target: { x: number; y: number },
+  ) => {
+    const d0 = Math.hypot(g.corner.x - g.opp.x, g.corner.y - g.opp.y) || 1;
+    let s = Math.hypot(target.x - g.opp.x, target.y - g.opp.y) / d0;
+    s = Math.max(0.3, Math.min(3, s));
+    // কোনা আঙুলের দিকে যায় — বিপরীত কোনাকে কেন্দ্র করে ঘোরা+বড়-ছোট
+    // (আগে শুধু বড়-ছোট হতো, তাই আঙুল পাশে গেলে কোনা উল্টো দিকে যেত)
+    const ang0 = Math.atan2(g.corner.y - g.opp.y, g.corner.x - g.opp.x);
+    const ang1 = Math.atan2(target.y - g.opp.y, target.x - g.opp.x);
+    const rot = Math.hypot(target.x - g.opp.x, target.y - g.opp.y) < 1 ? 0 : ang1 - ang0;
+    const cos = Math.cos(rot) * s, sin = Math.sin(rot) * s;
+    const sc = (q: { x: number; y: number }) => {
+      const dx = q.x - g.opp.x, dy = q.y - g.opp.y;
+      return { x: g.opp.x + dx * cos - dy * sin, y: g.opp.y + dx * sin + dy * cos };
+    };
+    const all = g.origAll;
+    const key = (pt: { x: number; y: number }) => `${Math.round(pt.x * 100)},${Math.round(pt.y * 100)}`;
+    const mapped = new Map<string, { x: number; y: number }>();
+    // বীজ: টানা প্লটের ৪ কোনা
+    for (const pt of g.pts) mapped.set(key(pt), sc(pt));
+    // টানা কোনাটা হুবহু জোড়ার জায়গায় বসবে — rotate/scale-এর ভগ্নাংশ ভুল নয়
+    mapped.set(key(g.corner), { x: target.x, y: target.y });
+    // টানা প্লটের বাহুর ওপরের জোড়া (মাঝখানের খুঁটি) — বাহু সোজা থাকে
+    const sides: [{ x: number; y: number }, { x: number; y: number }][] = [];
+    for (let i = 0; i < g.pts.length; i++) sides.push([g.pts[i], g.pts[(i + 1) % g.pts.length]]);
+    const onSide = (pt: { x: number; y: number }) => {
+      for (const [a, b] of sides) {
+        const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+        let t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / l2;
+        if (t < -0.01 || t > 1.01) continue;
+        t = Math.max(0, Math.min(1, t));
+        if (Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy)) < 1) return true;
+      }
+      return false;
+    };
+    for (const sg of all) {
+      for (const pt of [{ x: sg.x1, y: sg.y1 }, { x: sg.x2, y: sg.y2 }]) {
+        const k = key(pt);
+        if (!mapped.has(k) && onSide(pt)) mapped.set(k, sc(pt));
+      }
+    }
+    // ধারাবাহিক দাগ: পুরোপুরি সরছে এমন দাগের সাথে একই সরলরেখায়
+    // লাগা দাগের অপর প্রান্তও একইভাবে সরে — পুরো সোজা বাহু একসাথে যায়
+    let changed = true;
+    let guard = 0;
+    while (changed && guard++ < 20) {
+      changed = false;
+      for (const sg of all) {
+        const aK = key({ x: sg.x1, y: sg.y1 }), bK = key({ x: sg.x2, y: sg.y2 });
+        const aM = mapped.has(aK), bM = mapped.has(bK);
+        if (aM === bM) continue;
+        const mappedPt = aM ? { x: sg.x1, y: sg.y1 } : { x: sg.x2, y: sg.y2 };
+        const unmappedPt = aM ? { x: sg.x2, y: sg.y2 } : { x: sg.x1, y: sg.y1 };
+        const unmappedK = aM ? bK : aK;
+        let cont = false;
+        for (const t of all) {
+          if (t === sg) continue;
+          const tA = key({ x: t.x1, y: t.y1 }), tB = key({ x: t.x2, y: t.y2 });
+          if (!mapped.has(tA) || !mapped.has(tB)) continue;
+          if (tA !== key(mappedPt) && tB !== key(mappedPt)) continue;
+          const tdx = t.x2 - t.x1, tdy = t.y2 - t.y1, sdx = sg.x2 - sg.x1, sdy = sg.y2 - sg.y1;
+          const tl = Math.hypot(tdx, tdy) || 1, sl = Math.hypot(sdx, sdy) || 1;
+          const cross = (tdx * sdy - tdy * sdx) / (tl * sl);
+          const dot = (tdx * sdx + tdy * sdy) / (tl * sl);
+          if (Math.abs(cross) < 0.02 && dot > 0) { cont = true; break; }
+        }
+        if (cont) { mapped.set(unmappedK, sc(unmappedPt)); changed = true; }
+      }
+    }
+    const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
+      all.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
+    );
+    setSegments((prev) =>
+      prev.map((sg) => {
+        const o = byId.get(sg.id);
+        if (!o) return sg;
+        const a = mapped.get(key({ x: o.x1, y: o.y1 }));
+        const b = mapped.get(key({ x: o.x2, y: o.y2 }));
+        // শুধু ছবির জ্যামিতি বদলায় — বাহুর মান (lengthFt) যেমন আছে তেমনই থাকে,
+        // তাই লেবেল/ক্ষেত্রফল/শতক/মোট বার/রিপোর্ট কিছুই বদলায় না
+        return { ...sg, x1: a ? a.x : o.x1, y1: a ? a.y : o.y1, x2: b ? b.x : o.x2, y2: b ? b.y : o.y2 };
+      })
+    );
+  };
+
   /* ---------------- pointer flow ---------------- */
   const handleDown = (e: PointerEvent) => {
     if(resizeDrag.current || cardDrag.current) return;
@@ -833,40 +933,12 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
       g.moved = true;
       const k = unitsPerPx();
-      let dx = (e.clientX - g.sx) * k, dy = (e.clientY - g.sy) * k;
-      // ম্যাগনেটিক স্ন্যাপ (২৫ নভেম্বর: ঘর নাড়ালে কোনো জোড়ায় বসত না) —
-      // পুরো প্লট সরালে তার কোনাগুলো কাছাকাছি জোড়ায় ঠিক বসে, যাতে পাশের
-      // প্লটের সাথে মেলানো যায়। নিজের আসল জোড়া লক্ষ্য নয় — নইলে চুম্বক
-      // প্লটকে আগের জায়গায় টেনে ধরে রাখত।
-      const ownIds = new Set<string>(g.orig.map((o) => o.id));
-      const heads: { x: number; y: number }[] = [];
-      for (const o of g.orig) {
-        heads.push({ x: o.x1, y: o.y1 });
-        heads.push({ x: o.x2, y: o.y2 });
-      }
-      let snapTo: { dx: number; dy: number; d: number } | null = null;
-      for (const h of heads) {
-        const mh = { x: h.x + dx, y: h.y + dy };
-        for (const o of segments) {
-          if (ownIds.has(o.id)) continue;
-          for (const q of [
-            { x: o.x1, y: o.y1 },
-            { x: o.x2, y: o.y2 },
-          ]) {
-            if (heads.some((hh) => Math.hypot(q.x - hh.x, q.y - hh.y) <= 2)) continue;
-            const d = Math.hypot(mh.x - q.x, mh.y - q.y);
-            if (d <= CORNER_PX * k && (!snapTo || d < snapTo.d)) {
-              snapTo = { dx: dx + (q.x - mh.x), dy: dy + (q.y - mh.y), d };
-            }
-          }
-        }
-      }
-      if (snapTo) {
-        dx = snapTo.dx;
-        dy = snapTo.dy;
-        if (!lastSnapRef.current) vibrate();
-        lastSnapRef.current = true;
-      } else lastSnapRef.current = false;
+      const dx = (e.clientX - g.sx) * k, dy = (e.clientY - g.sy) * k;
+      // টানার সময় চুম্বক নেই (২৬ নভেম্বর: চুম্বক প্লটকে জোড়ায় আটকে
+      // রাখত — আঙুল এগোলে প্লট আটকে থাকত, তারপর ছিটকে যেত; আটকে আটকে
+      // যাওয়ার কারণ)। প্লট আঙুলের সাথে হুবহু সরে; ছাড়ার সময় (handleUp)
+      // কাছের জোড়ায় বসে + ভাইব্রেট হয়।
+      g.lastDx = dx; g.lastDy = dy;
       const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
         g.orig.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
       );
@@ -892,115 +964,11 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
       g.moved = true;
       const p = toWorld(e.clientX, e.clientY);
-      // ম্যাগনেটিক স্ন্যাপ (২৫ নভেম্বর Founder: কাছে না টেনে দূরে ঠেলে দেয়) —
-      // আগে টানা কোনা শুধু মূল রশ্মি বরাবর যেত (বিপরীত কোনাকে কেন্দ্র করে
-      // শুধু বড়-ছোট), তাই পাশের জোড়ার দিকে টানলে কোনা উল্টো দিকে সরে
-      // যেত আর কোনো জোড়ায় বসত না। এখন কোনা আঙুলের জায়গায় যায়, আর
-      // কাছাকাছি কোনো জোড়া থাকলে ঠিক সেখানে বসে (নিজের আসল জায়গা বাদ —
-      // নইলে চুম্বক সেখানেই আটকে রাখত)। বাকি প্লট একইভাবে ঘোরে+বড়-ছোট
-      // হয় — আকৃতি একই থাকে, বাহুর মান বদলায় না।
-      let target = { x: p.x, y: p.y };
-      const ownIds = new Set<string>(g.orig.map((o) => o.id));
-      // চুম্বকের লক্ষ্য নয়: কোনার আসল জায়গা আর বর্তমান জায়গা — আঙুল
-      // সেখান থেকে দূরে গেলে (৫ এককের বেশি) চুম্বক কোনাকে সেখানেই টেনে
-      // ধরে রাখত, সরতে দিত না (২৫ নভেম্বর: কাছে না টেনে উল্টো দিকে ঠেলে
-      // দেওয়ার কারণ)। আঙুল ঠিক সেই জায়গায় থাকলে (৫ এককের ভেতরে) সেখানেই
-      // থাকা ঠিক — জোড়ায় বসা, চুম্বক ধরে রাখে।
-      const curCorner = cornerCurRef.current ?? g.corner;
-      const snap = snapCorner(p.x, p.y, ownIds);
-      if (snap.snapped) {
-        const selfPt =
-          Math.hypot(snap.x - g.corner.x, snap.y - g.corner.y) <= 2 ||
-          Math.hypot(snap.x - curCorner.x, snap.y - curCorner.y) <= 2;
-        const fingerNear = Math.hypot(p.x - snap.x, p.y - snap.y) <= 5;
-        if (!selfPt || fingerNear) {
-          target = { x: snap.x, y: snap.y };
-          if (!lastSnapRef.current) vibrate();
-          lastSnapRef.current = true;
-        } else lastSnapRef.current = false;
-      } else lastSnapRef.current = false;
-      cornerCurRef.current = { ...target };
-      const d0 = Math.hypot(g.corner.x - g.opp.x, g.corner.y - g.opp.y) || 1;
-      let s = Math.hypot(target.x - g.opp.x, target.y - g.opp.y) / d0;
-      s = Math.max(0.3, Math.min(3, s));
-      // কোনা আঙুলের দিকে যায় — বিপরীত কোনাকে কেন্দ্র করে ঘোরা+বড়-ছোট
-      // (আগে শুধু বড়-ছোট হতো, তাই আঙুল পাশে গেলে কোনা উল্টো দিকে যেত)
-      const ang0 = Math.atan2(g.corner.y - g.opp.y, g.corner.x - g.opp.x);
-      const ang1 = Math.atan2(target.y - g.opp.y, target.x - g.opp.x);
-      const rot = Math.hypot(target.x - g.opp.x, target.y - g.opp.y) < 1 ? 0 : ang1 - ang0;
-      const cos = Math.cos(rot) * s, sin = Math.sin(rot) * s;
-      const sc = (q: { x: number; y: number }) => {
-        const dx = q.x - g.opp.x, dy = q.y - g.opp.y;
-        return { x: g.opp.x + dx * cos - dy * sin, y: g.opp.y + dx * sin + dy * cos };
-      };
-      const all = g.origAll;
-      const key = (pt: { x: number; y: number }) => `${Math.round(pt.x * 100)},${Math.round(pt.y * 100)}`;
-      const mapped = new Map<string, { x: number; y: number }>();
-      // বীজ: টানা প্লটের ৪ কোনা
-      for (const pt of g.pts) mapped.set(key(pt), sc(pt));
-      // টানা কোনাটা হুবহু জোড়ার জায়গায় বসবে — rotate/scale-এর ভগ্নাংশ ভুল নয়
-      mapped.set(key(g.corner), { x: target.x, y: target.y });
-      // টানা প্লটের বাহুর ওপরের জোড়া (মাঝখানের খুঁটি) — বাহু সোজা থাকে
-      const sides: [{ x: number; y: number }, { x: number; y: number }][] = [];
-      for (let i = 0; i < g.pts.length; i++) sides.push([g.pts[i], g.pts[(i + 1) % g.pts.length]]);
-      const onSide = (pt: { x: number; y: number }) => {
-        for (const [a, b] of sides) {
-          const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
-          let t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / l2;
-          if (t < -0.01 || t > 1.01) continue;
-          t = Math.max(0, Math.min(1, t));
-          if (Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy)) < 1) return true;
-        }
-        return false;
-      };
-      for (const sg of all) {
-        for (const pt of [{ x: sg.x1, y: sg.y1 }, { x: sg.x2, y: sg.y2 }]) {
-          const k = key(pt);
-          if (!mapped.has(k) && onSide(pt)) mapped.set(k, sc(pt));
-        }
-      }
-      // ধারাবাহিক দাগ: পুরোপুরি সরছে এমন দাগের সাথে একই সরলরেখায়
-      // লাগা দাগের অপর প্রান্তও একইভাবে সরে — পুরো সোজা বাহু একসাথে যায়
-      let changed = true;
-      let guard = 0;
-      while (changed && guard++ < 20) {
-        changed = false;
-        for (const sg of all) {
-          const aK = key({ x: sg.x1, y: sg.y1 }), bK = key({ x: sg.x2, y: sg.y2 });
-          const aM = mapped.has(aK), bM = mapped.has(bK);
-          if (aM === bM) continue;
-          const mappedPt = aM ? { x: sg.x1, y: sg.y1 } : { x: sg.x2, y: sg.y2 };
-          const unmappedPt = aM ? { x: sg.x2, y: sg.y2 } : { x: sg.x1, y: sg.y1 };
-          const unmappedK = aM ? bK : aK;
-          let cont = false;
-          for (const t of all) {
-            if (t === sg) continue;
-            const tA = key({ x: t.x1, y: t.y1 }), tB = key({ x: t.x2, y: t.y2 });
-            if (!mapped.has(tA) || !mapped.has(tB)) continue;
-            if (tA !== key(mappedPt) && tB !== key(mappedPt)) continue;
-            const tdx = t.x2 - t.x1, tdy = t.y2 - t.y1, sdx = sg.x2 - sg.x1, sdy = sg.y2 - sg.y1;
-            const tl = Math.hypot(tdx, tdy) || 1, sl = Math.hypot(sdx, sdy) || 1;
-            const cross = (tdx * sdy - tdy * sdx) / (tl * sl);
-            const dot = (tdx * sdx + tdy * sdy) / (tl * sl);
-            if (Math.abs(cross) < 0.02 && dot > 0) { cont = true; break; }
-          }
-          if (cont) { mapped.set(unmappedK, sc(unmappedPt)); changed = true; }
-        }
-      }
-      const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
-        all.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
-      );
-      setSegments((prev) =>
-        prev.map((sg) => {
-          const o = byId.get(sg.id);
-          if (!o) return sg;
-          const a = mapped.get(key({ x: o.x1, y: o.y1 }));
-          const b = mapped.get(key({ x: o.x2, y: o.y2 }));
-          // শুধু ছবির জ্যামিতি বদলায় — বাহুর মান (lengthFt) যেমন আছে তেমনই থাকে,
-          // তাই লেবেল/ক্ষেত্রফল/শতক/মোট বার/রিপোর্ট কিছুই বদলায় না
-          return { ...sg, x1: a ? a.x : o.x1, y1: a ? a.y : o.y1, x2: b ? b.x : o.x2, y2: b ? b.y : o.y2 };
-        })
-      );
+      // টানার সময় চুম্বক নেই — কোনা আঙুলের জায়গায় যায় (২৬ নভেম্বর:
+      // চুম্বক কোনাকে জোড়ায় আটকে রাখত, আঙুল এগোলে ছিটকে যেত)। ছাড়ার
+      // সময় (handleUp) কাছের জোড়ায় বসে + ভাইব্রেট হয়।
+      cornerCurRef.current = { x: p.x, y: p.y };
+      applyPlotCorner(g, { x: p.x, y: p.y });
       return;
     }
     if (g.kind === 'moveSeg') {
@@ -1056,7 +1024,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
         if (hot) {
           const targetY = toWorld(e.clientX, geom.centerY).y;
           dy = targetY - (g.pts[1] + g.pts[3]) / 2;
-          if (!deleteSnapRef.current) vibrate();
+          if (!deleteSnapRef.current) vibrate(20); // পটি গরম হলে ভাইব্রেট — ১২ms ফোনে টের পাওয়া যায় না
           deleteSnapRef.current = true;
         } else {
           deleteSnapRef.current = false;
@@ -1126,6 +1094,70 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     // লক দাগ হলে deleteSegment নিজেই হিন্ট দেয়, মোছে না
     if (g.kind === 'moveSeg' && g.moved && deleteHotRef.current) {
       deleteSegment(g.id);
+    }
+    // ছাড়ার সময় চুম্বক — টানার সময় প্লট/কোনা আঙুলের সাথে হুবহু যায়
+    // (চুম্বক নেই, নইলে আটকে আটকে যেত); ছাড়লেই কাছের জোড়ায় বসে +
+    // ভাইব্রেট হয় (pointerup-এ ভাইব্রেট নিশ্চিত — টাচে pointerdown-এ
+    // অ্যাক্টিভেশন মেলে না, pointermove-এও মেলে না; pointerup/click-এ মেলে)।
+    if (g.kind === 'plotMove' && g.moved) {
+      const k = unitsPerPx();
+      let dx = g.lastDx ?? 0, dy = g.lastDy ?? 0;
+      if (e) { dx = (e.clientX - g.sx) * k; dy = (e.clientY - g.sy) * k; }
+      const ownIds = new Set<string>(g.orig.map((o) => o.id));
+      const heads: { x: number; y: number }[] = [];
+      for (const o of g.orig) { heads.push({ x: o.x1, y: o.y1 }); heads.push({ x: o.x2, y: o.y2 }); }
+      let snapTo: { dx: number; dy: number; d: number } | null = null;
+      for (const h of heads) {
+        const mh = { x: h.x + dx, y: h.y + dy };
+        for (const o of segments) {
+          if (ownIds.has(o.id)) continue;
+          for (const q of [{ x: o.x1, y: o.y1 }, { x: o.x2, y: o.y2 }]) {
+            if (heads.some((hh) => Math.hypot(q.x - hh.x, q.y - hh.y) <= 2)) continue;
+            const d = Math.hypot(mh.x - q.x, mh.y - q.y);
+            if (d <= CORNER_PX * k && (!snapTo || d < snapTo.d)) {
+              snapTo = { dx: dx + (q.x - mh.x), dy: dy + (q.y - mh.y), d };
+            }
+          }
+        }
+      }
+      if (snapTo) {
+        const { dx: sdx, dy: sdy } = snapTo;
+        const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number }>(
+          g.orig.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number }]),
+        );
+        setSegments((prev) =>
+          prev.map((sg) => {
+            const o = byId.get(sg.id);
+            if (!o) return sg;
+            return { ...sg, x1: o.x1 + sdx, y1: o.y1 + sdy, x2: o.x2 + sdx, y2: o.y2 + sdy };
+          })
+        );
+        vibrate(25);
+      }
+    }
+    if (g.kind === 'plotCorner' && g.moved) {
+      const ownIds = new Set<string>(g.orig.map((o) => o.id));
+      const curCorner = cornerCurRef.current ?? g.corner;
+      let px = curCorner.x, py = curCorner.y;
+      if (e) { const p = toWorld(e.clientX, e.clientY); px = p.x; py = p.y; }
+      // চুম্বকের লক্ষ্য খোঁজা — কোনার নিজের আসল/বর্তমান জায়গা বাদ: ভাগ করা
+      // জোড়া কোনার সাথে সাথে সরে, তাই কোনার বর্তমান জায়গাটাই সবচেয়ে কাছের
+      // লক্ষ্য হয়ে স্ন্যাপকে সেখানেই আটকে রাখত (ছাড়ার পরও কোনা জোড়ায়
+      // বসত না)। আসল জায়গা/বর্তমান জায়গার ২ এককের ভেতরের প্রান্ত লক্ষ্য নয়।
+      let best = { x: px, y: py, snapped: false, dist: CORNER_PX * unitsPerPx() };
+      for (const s of segments) {
+        if (ownIds.has(s.id)) continue;
+        for (const q of [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }]) {
+          if (Math.hypot(q.x - g.corner.x, q.y - g.corner.y) <= 2) continue;
+          if (Math.hypot(q.x - curCorner.x, q.y - curCorner.y) <= 2) continue;
+          const d = Math.hypot(px - q.x, py - q.y);
+          if (d < best.dist) best = { x: q.x, y: q.y, snapped: true, dist: d };
+        }
+      }
+      if (best.snapped) {
+        applyPlotCorner(g, { x: best.x, y: best.y });
+        vibrate(25);
+      }
     }
     if (g.kind === 'endpoint' && e) {
       const seg = segments.find((s) => s.id === g.id);
