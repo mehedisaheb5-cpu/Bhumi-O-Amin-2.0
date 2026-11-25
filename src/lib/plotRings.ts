@@ -29,8 +29,79 @@ export type PlotRing = {
 
 const MAX_EDGES = 6;
 
+/* জোড়া ভাঙা সহনশীলতা (২.৫ একক) — আঙুলে টানার পর কোনো জোড়া ১–২ একক
+   সরে গেলে রিং যেন না ভাঙে। ২৫ নভেম্বর: Founder-এর ফোনে নিচের প্লটের
+   1.77 শতক চিপ হারিয়ে মোট "১টি প্লট · 1.32 শতক" দেখাচ্ছিল — (321,344)
+   জোড়াটা ~১.৫ একক সরে গিয়েছিল, আর রিং খোঁজা প্রান্তের হুবহু মিল
+   চাইত বলে নিচের প্লট আর ডানদিকের সরু প্লট — দুটোই হারিয়ে গিয়েছিল।
+   কাছাকাছি প্রান্ত এখন একই জোড়া ধরা হয়; জোড়ার প্রতিনিধি সেই
+   সঠিক বিন্দুটাই হয় যেখানে সবচেয়ে বেশি দাগ মেশে (তাই বাহুর দিক
+   হুবহু থাকে, ভাগ করা বাহু জোড়া লাগে)। */
+const CLUSTER_TOL = 2.5;
+
+function clusterEndpoints(segments: RingSegment[]) {
+  type EP = { x: number; y: number };
+  const eps: EP[] = [];
+  for (const s of segments) {
+    eps.push({ x: s.x1, y: s.y1 });
+    eps.push({ x: s.x2, y: s.y2 });
+  }
+  const parent = eps.map((_, i) => i);
+  const find = (i: number): number => {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  };
+  for (let i = 0; i < eps.length; i++) {
+    for (let j = i + 1; j < eps.length; j++) {
+      if (Math.hypot(eps[i].x - eps[j].x, eps[i].y - eps[j].y) <= CLUSTER_TOL) {
+        const ra = find(i);
+        const rb = find(j);
+        if (ra !== rb) parent[ra] = rb;
+      }
+    }
+  }
+  const ekey = (p: EP) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`;
+  const groups = new Map<number, number[]>();
+  eps.forEach((_, i) => {
+    const r = find(i);
+    const g = groups.get(r) || [];
+    g.push(i);
+    groups.set(r, g);
+  });
+  const repByKey = new Map<string, { x: number; y: number }>();
+  const idByKey = new Map<string, number>();
+  let cid = 0;
+  for (const members of groups.values()) {
+    const counts = new Map<string, { pt: { x: number; y: number }; n: number }>();
+    for (const m of members) {
+      const k = ekey(eps[m]);
+      const c = counts.get(k) || { pt: { x: eps[m].x, y: eps[m].y }, n: 0 };
+      c.n++;
+      counts.set(k, c);
+    }
+    let best = [...counts.values()][0];
+    for (const c of counts.values()) if (c.n > best.n) best = c;
+    for (const m of members) {
+      repByKey.set(ekey(eps[m]), best.pt);
+      idByKey.set(ekey(eps[m]), cid);
+    }
+    cid++;
+  }
+  return { repByKey, idByKey, ekey };
+}
+
 export function findPlotRings(segments: RingSegment[]): PlotRing[] {
-  const key = (p: { x: number; y: number }) => `${Math.round(p.x)},${Math.round(p.y)}`;
+  const { repByKey, idByKey, ekey } = clusterEndpoints(segments);
+  // একই জোড়ার প্রান্ত একই চাবি পায় — ১–২ একক সরে গেলেও রিং বন্ধ থাকে
+  const key = (p: { x: number; y: number }) => {
+    const id = idByKey.get(ekey(p));
+    return id !== undefined ? `c${id}` : `p${Math.round(p.x)},${Math.round(p.y)}`;
+  };
+  // রিংয়ের কোনা জোড়ার প্রতিনিধি বিন্দুতে বসে — আঁকা বহুভুজ বন্ধ থাকে
+  const rep = (p: { x: number; y: number }) => repByKey.get(ekey(p)) || p;
   const adj = new Map<string, RingSegment[]>();
   for (const sg of segments) {
     for (const pt of [
@@ -128,10 +199,10 @@ export function findPlotRings(segments: RingSegment[]): PlotRing[] {
           const apt = a === curKey ? { x: nxt.x2, y: nxt.y2 } : { x: nxt.x1, y: nxt.y1 };
           if (to === startKey && segIds.length < 3) continue; // ৪ দাগের কমে রিং হয় না
           if (to !== startKey && segIds.length >= MAX_EDGES - 1) continue; // ৬ দাগের বেশি নয়
-          dfs(to, nxt, [...segIds, nxt.id], [...sides, nxt.lengthFt], [...pts, apt]);
+          dfs(to, nxt, [...segIds, nxt.id], [...sides, nxt.lengthFt], [...pts, rep(apt)]);
         }
       };
-      dfs(key(firstPt), start, [start.id], [start.lengthFt], [startPt, firstPt]);
+      dfs(key(firstPt), start, [start.id], [start.lengthFt], [rep(startPt), rep(firstPt)]);
     }
   }
 

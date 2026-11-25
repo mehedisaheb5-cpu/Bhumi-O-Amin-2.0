@@ -116,6 +116,12 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   const deleteHotRef = useRef(false);
   /** পটিতে ঢোকার সময় একবার ভাইব্রেট — বারবার নয় */
   const deleteSnapRef = useRef(false);
+  /** লক দাগ নিচে টানার হিন্ট এক টানে একবারই — প্রতি move-এ টাইমার রিসেট নয় */
+  const lockHintShownRef = useRef(false);
+  /** লক কোনা টানার সময় কোনাটা এখন কোথায় — চুম্বক যেন কোনাকে তার নিজের
+      বর্তমান জায়গাতেই না টানে (জোড়ার দাগগুলো কোনার সাথে সাথে সরে, তাই
+      বর্তমান জায়গাটাই সবচেয়ে কাছের লক্ষ্য হয়ে কোনাকে আটকে রাখত) */
+  const cornerCurRef = useRef<{ x: number; y: number } | null>(null);
   /** deleteZone state-এর আয়না — প্রতি move-এ অকারণ রি-রেন্ডার ঠেকাতে */
   const deleteZoneRef = useRef({ active: false, hot: false });
   const toolbarDrag = useRef<{ dx: number; dy: number } | null>(null);
@@ -676,6 +682,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
   /* ---------------- pointer flow ---------------- */
   const handleDown = (e: PointerEvent) => {
     if(resizeDrag.current || cardDrag.current) return;
+    lockHintShownRef.current = false;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     const p = toWorld(e.clientX, e.clientY);
     // color fill: tapping inside a plot paints it with the active toolbar colour
@@ -729,6 +736,7 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
           // আসল জায়গা লাগে; pts = টানা প্লটের ৪ কোনা
           const origAll = segments.map((s) => ({ id: s.id, x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2, len: s.lengthFt }));
           press.current = { kind: 'plotCorner', plotId: lockedPlot.id, corner: cornerPt, opp, sx: e.clientX, sy: e.clientY, orig, origAll, pts: lockedPlot.pts, moved: false };
+          cornerCurRef.current = { x: cornerPt.x, y: cornerPt.y };
           setSelectedId(null);
           vibrate();
           return;
@@ -755,8 +763,11 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     const seg = findSegment(p.x, p.y);
     const ep = findEndpoint(p.x, p.y);
 
+    // প্রান্তের ধরা-ছোঁয়া ছোট (১১px) — নইলে ছোট দাগের গায়ে ট্যাপ করলেই
+    // কোনা ধরে, দাগটা আর সরানো/মোছা যায় না (২৫ নভেম্বর: বাড়তি দাগে
+    // টানলেও লাল পটি আসে না); দাগের গায়ের ট্যাপ এখন দাগ সরায় (moveSeg)
     const _lockedIds=completedSegIds();
-    if (ep && _lockedIds.has(ep.s.id)) { /* locked plot corner - ignore */ } else if (ep && (!seg || ep.s.id === seg.id) && Math.hypot(p.x - (ep.end === 1 ? ep.s.x1 : ep.s.x2), p.y - (ep.end === 1 ? ep.s.y1 : ep.s.y2)) < END_PX * unitsPerPx() * 0.7) {
+    if (ep && _lockedIds.has(ep.s.id)) { /* locked plot corner - ignore */ } else if (ep && (!seg || ep.s.id === seg.id) && Math.hypot(p.x - (ep.end === 1 ? ep.s.x1 : ep.s.x2), p.y - (ep.end === 1 ? ep.s.y1 : ep.s.y2)) < END_PX * unitsPerPx() * 0.5) {
       // A corner that is shared by two or more lines = the plot itself.
       // Grabbing it drags the WHOLE plot (so the plot grows/shrinks as one piece).
       press.current = { kind: 'endpoint', id: ep.s.id, end: ep.end };
@@ -822,7 +833,40 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
       g.moved = true;
       const k = unitsPerPx();
-      const dx = (e.clientX - g.sx) * k, dy = (e.clientY - g.sy) * k;
+      let dx = (e.clientX - g.sx) * k, dy = (e.clientY - g.sy) * k;
+      // ম্যাগনেটিক স্ন্যাপ (২৫ নভেম্বর: ঘর নাড়ালে কোনো জোড়ায় বসত না) —
+      // পুরো প্লট সরালে তার কোনাগুলো কাছাকাছি জোড়ায় ঠিক বসে, যাতে পাশের
+      // প্লটের সাথে মেলানো যায়। নিজের আসল জোড়া লক্ষ্য নয় — নইলে চুম্বক
+      // প্লটকে আগের জায়গায় টেনে ধরে রাখত।
+      const ownIds = new Set<string>(g.orig.map((o) => o.id));
+      const heads: { x: number; y: number }[] = [];
+      for (const o of g.orig) {
+        heads.push({ x: o.x1, y: o.y1 });
+        heads.push({ x: o.x2, y: o.y2 });
+      }
+      let snapTo: { dx: number; dy: number; d: number } | null = null;
+      for (const h of heads) {
+        const mh = { x: h.x + dx, y: h.y + dy };
+        for (const o of segments) {
+          if (ownIds.has(o.id)) continue;
+          for (const q of [
+            { x: o.x1, y: o.y1 },
+            { x: o.x2, y: o.y2 },
+          ]) {
+            if (heads.some((hh) => Math.hypot(q.x - hh.x, q.y - hh.y) <= 2)) continue;
+            const d = Math.hypot(mh.x - q.x, mh.y - q.y);
+            if (d <= CORNER_PX * k && (!snapTo || d < snapTo.d)) {
+              snapTo = { dx: dx + (q.x - mh.x), dy: dy + (q.y - mh.y), d };
+            }
+          }
+        }
+      }
+      if (snapTo) {
+        dx = snapTo.dx;
+        dy = snapTo.dy;
+        if (!lastSnapRef.current) vibrate();
+        lastSnapRef.current = true;
+      } else lastSnapRef.current = false;
       const byId = new Map<string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }>(
         g.orig.map((o) => [o.id, o] as [string, { id: string; x1: number; y1: number; x2: number; y2: number; len?: number }]),
       );
@@ -848,18 +892,54 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
       g.moved = true;
       const p = toWorld(e.clientX, e.clientY);
+      // ম্যাগনেটিক স্ন্যাপ (২৫ নভেম্বর Founder: কাছে না টেনে দূরে ঠেলে দেয়) —
+      // আগে টানা কোনা শুধু মূল রশ্মি বরাবর যেত (বিপরীত কোনাকে কেন্দ্র করে
+      // শুধু বড়-ছোট), তাই পাশের জোড়ার দিকে টানলে কোনা উল্টো দিকে সরে
+      // যেত আর কোনো জোড়ায় বসত না। এখন কোনা আঙুলের জায়গায় যায়, আর
+      // কাছাকাছি কোনো জোড়া থাকলে ঠিক সেখানে বসে (নিজের আসল জায়গা বাদ —
+      // নইলে চুম্বক সেখানেই আটকে রাখত)। বাকি প্লট একইভাবে ঘোরে+বড়-ছোট
+      // হয় — আকৃতি একই থাকে, বাহুর মান বদলায় না।
+      let target = { x: p.x, y: p.y };
+      const ownIds = new Set<string>(g.orig.map((o) => o.id));
+      // চুম্বকের লক্ষ্য নয়: কোনার আসল জায়গা আর বর্তমান জায়গা — আঙুল
+      // সেখান থেকে দূরে গেলে (৫ এককের বেশি) চুম্বক কোনাকে সেখানেই টেনে
+      // ধরে রাখত, সরতে দিত না (২৫ নভেম্বর: কাছে না টেনে উল্টো দিকে ঠেলে
+      // দেওয়ার কারণ)। আঙুল ঠিক সেই জায়গায় থাকলে (৫ এককের ভেতরে) সেখানেই
+      // থাকা ঠিক — জোড়ায় বসা, চুম্বক ধরে রাখে।
+      const curCorner = cornerCurRef.current ?? g.corner;
+      const snap = snapCorner(p.x, p.y, ownIds);
+      if (snap.snapped) {
+        const selfPt =
+          Math.hypot(snap.x - g.corner.x, snap.y - g.corner.y) <= 2 ||
+          Math.hypot(snap.x - curCorner.x, snap.y - curCorner.y) <= 2;
+        const fingerNear = Math.hypot(p.x - snap.x, p.y - snap.y) <= 5;
+        if (!selfPt || fingerNear) {
+          target = { x: snap.x, y: snap.y };
+          if (!lastSnapRef.current) vibrate();
+          lastSnapRef.current = true;
+        } else lastSnapRef.current = false;
+      } else lastSnapRef.current = false;
+      cornerCurRef.current = { ...target };
       const d0 = Math.hypot(g.corner.x - g.opp.x, g.corner.y - g.opp.y) || 1;
-      let s = Math.hypot(p.x - g.opp.x, p.y - g.opp.y) / d0;
+      let s = Math.hypot(target.x - g.opp.x, target.y - g.opp.y) / d0;
       s = Math.max(0.3, Math.min(3, s));
-      const sc = (q: { x: number; y: number }) => ({
-        x: g.opp.x + (q.x - g.opp.x) * s,
-        y: g.opp.y + (q.y - g.opp.y) * s,
-      });
+      // কোনা আঙুলের দিকে যায় — বিপরীত কোনাকে কেন্দ্র করে ঘোরা+বড়-ছোট
+      // (আগে শুধু বড়-ছোট হতো, তাই আঙুল পাশে গেলে কোনা উল্টো দিকে যেত)
+      const ang0 = Math.atan2(g.corner.y - g.opp.y, g.corner.x - g.opp.x);
+      const ang1 = Math.atan2(target.y - g.opp.y, target.x - g.opp.x);
+      const rot = Math.hypot(target.x - g.opp.x, target.y - g.opp.y) < 1 ? 0 : ang1 - ang0;
+      const cos = Math.cos(rot) * s, sin = Math.sin(rot) * s;
+      const sc = (q: { x: number; y: number }) => {
+        const dx = q.x - g.opp.x, dy = q.y - g.opp.y;
+        return { x: g.opp.x + dx * cos - dy * sin, y: g.opp.y + dx * sin + dy * cos };
+      };
       const all = g.origAll;
       const key = (pt: { x: number; y: number }) => `${Math.round(pt.x * 100)},${Math.round(pt.y * 100)}`;
       const mapped = new Map<string, { x: number; y: number }>();
       // বীজ: টানা প্লটের ৪ কোনা
       for (const pt of g.pts) mapped.set(key(pt), sc(pt));
+      // টানা কোনাটা হুবহু জোড়ার জায়গায় বসবে — rotate/scale-এর ভগ্নাংশ ভুল নয়
+      mapped.set(key(g.corner), { x: target.x, y: target.y });
       // টানা প্লটের বাহুর ওপরের জোড়া (মাঝখানের খুঁটি) — বাহু সোজা থাকে
       const sides: [{ x: number; y: number }, { x: number; y: number }][] = [];
       for (let i = 0; i < g.pts.length; i++) sides.push([g.pts[i], g.pts[(i + 1) % g.pts.length]]);
@@ -927,7 +1007,15 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       const _lk2=completedSegIds();
       if(_lk2.has(g.id)){
         if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
-        // locked: don't move, but mark moved to avoid opening editor? Actually keep as tap
+        // লক দাগ নিচে টানলে পটি ওঠে না (মোছা যায় না) — কিন্তু চুপচাপ কিছু না
+        // ঘটলে মনে হয় অ্যাপ আটকে গেছে (২৫ নভেম্বর: "নিচে টানলে লাল পটি
+        // আসেনা")। তাই একবার লক হিন্ট দেখানো হয় — আনলক করলেই মোছা যাবে।
+        if (e.clientY > g.sy + 10 && !lockHintShownRef.current) {
+          lockHintShownRef.current = true;
+          setHint('🔒 প্লট লক আছে — মুছতে/সরাতে প্লটের 🔒 আইকনে ট্যাপ করে আনলক করুন');
+          window.setTimeout(() => setHint(null), 3000);
+          vibrate();
+        }
         return;
       }
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) < MIN_MOVE) return;
@@ -935,13 +1023,17 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
       const k = unitsPerPx();
       let dx = (e.clientX - g.sx) * k, dy = (e.clientY - g.sy) * k;
       // magnet: whichever head ends up nearest another line's head lands exactly on it,
-      // so a moved line can be clicked into a free corner instead of "almost" there
+      // so a moved line can be clicked into a free corner instead of "almost" there.
+      // নিজের আসল কোনা লক্ষ্য নয় — নইলে চুম্বক দাগকে আগের জায়গায় টেনে
+      // ধরে রাখে, টানার উল্টো দিকে ঠেলে (২৫ নভেম্বর Founder)।
       const heads = [{ x: g.pts[0] + dx, y: g.pts[1] + dy }, { x: g.pts[2] + dx, y: g.pts[3] + dy }];
+      const origHeads = [{ x: g.pts[0], y: g.pts[1] }, { x: g.pts[2], y: g.pts[3] }];
       let snapTo: { dx: number; dy: number; d: number } | null = null;
       for (const h of heads) {
         for (const o of segments) {
           if (o.id === g.id) continue;
           for (const q of [{ x: o.x1, y: o.y1 }, { x: o.x2, y: o.y2 }]) {
+            if (origHeads.some((hh) => Math.hypot(q.x - hh.x, q.y - hh.y) <= 2)) continue;
             const d = Math.hypot(h.x - q.x, h.y - q.y);
             if (d <= EDGE_PX * k && (!snapTo || d < snapTo.d)) {
               snapTo = { dx: dx + (q.x - h.x), dy: dy + (q.y - h.y), d };
@@ -1085,6 +1177,8 @@ export const DrawingCanvas: React.FC<{ lang?: Language; printRef?: { current: ((
     }
     press.current = { kind: 'none' };
     lastSnapRef.current = false;
+    lockHintShownRef.current = false;
+    cornerCurRef.current = null;
     updateDeleteZone(false, false);
     deleteHotRef.current = false;
     deleteSnapRef.current = false;
