@@ -10,7 +10,7 @@ interface BottomNavProps {
 
 /**
  * ফিল্ড আমিন — নিচের বার: ডিজাইন C-এর ভাসমান পিল (design-previews/01-home.html)
- * ৪টা ট্যাব: হোম · দখল পরিমাপ · কনভার্টার · রিপোর্ট।
+ * ৪টা ট্যাব: হোম · দখল পরিমাপ · ক্যালকুলেটর · রিপোর্ট।
  * সব আইকনের নিচে নাম থাকে (আগে শুধু চালু ট্যাবে নাম দেখা যেত);
  * চালু ট্যাব সবুজ পিল হয়।
  */
@@ -20,7 +20,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onSelectTab, l
   const navItems: Array<{ id: NavTab; label: string; icon: React.ReactNode }> = [
     { id: 'home', label: isBn ? 'হোম' : 'Home', icon: <House className="w-6 h-6" /> },
     { id: 'possession', label: isBn ? 'দখল পরিমাপ' : 'Measure', icon: <Compass className="w-6 h-6" /> },
-    { id: 'converter', label: isBn ? 'কনভার্টার' : 'Converter', icon: <ArrowLeftRight className="w-6 h-6" /> },
+    { id: 'converter', label: isBn ? 'ক্যালকুলেটর' : 'Calculator', icon: <ArrowLeftRight className="w-6 h-6" /> },
     { id: 'reports', label: isBn ? 'রিপোর্ট' : 'Reports', icon: <FileText className="w-6 h-6" /> },
   ];
 

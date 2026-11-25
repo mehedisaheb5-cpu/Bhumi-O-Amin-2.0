@@ -1,10 +1,24 @@
 /**
- * পরিমাপ কনভার্টার — ডিজাইন B + A-এর দ্রুত টেবিল + C-এর সাম্প্রতিক
- * (design-previews/06b-converter.html)
+ * পরিমাপ ক্যালকুলেটর — ডার্ক ফোন-ক্যালকুলেটর স্টাইল (Founder-এর স্ক্রিনশট, ২৬ নভেম্বর ২০২৬)
+ *
+ * দুই মোড:
+ *  - লিংক ক্যালকুলেটর (ডিফল্ট): একক বদল (লিংক/ফুট/ইঞ্চি/মিটার + ক্ষেত্রফল)।
+ *    ফলাফল শুধু ২ লাইন — উপরে ইনপুট ("১২০ লিংক"), নিচে বদলানো মান
+ *    ("৭৯ ফুট ২ ইঞ্চি")। ইঞ্চি সবসময় পূর্ণ সংখ্যা (২.৪ → ২, ৮.৯ → ৯)।
+ *  - সাধারণ ক্যালকুলেটর: সাধারণ পাটিগণিত (AC, %, ⌫, ÷, ×, −, +, =, .)
+ *
+ * উপরে: কপি আইকন + "ক্যালকুলেটর" শিরোনাম + ইতিহাস (ঘড়ি) আইকন +
+ * মোড সুইচ (Link Calculator ↔ Normal Calculator)।
+ * নিচের বার (BottomNav) এই স্ক্রিনে লুকানো থাকে — App.tsx দেখুন
+ * (isCalculatorScreen)। হেডার থাকে, তাই বের হতে হেডারের লোগো/☰ ব্যবহার করতে হয়।
+ *
  * সম্পূর্ণ অফলাইন। সাম্প্রতিক হিসাব ফোনে (localStorage) থাকে।
+ * ফন্ট: Noto Serif Bengali (base64, calculator-font.css) — শুধু এই স্ক্রিনে,
+ * স্বাভাবিক ওজন (font-normal/medium), সব Bold নয়।
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpDown, Delete, Table2, Clock, X } from 'lucide-react';
+import { ArrowLeftRight, Clock, Copy, Delete, Table2, X } from 'lucide-react';
+import './calculator-font.css';
 
 type Kind = 'len' | 'area';
 interface Unit {
@@ -45,16 +59,12 @@ export const toBn = (s: string | number) => String(s).replace(/[0-9]/g, (d) => B
 const nice = (v: number, d = 3) =>
   toBn(Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: d }) : '0');
 
-/** ফুট → ফুট-ইঞ্চি (১ ঘর দশমিক ইঞ্চি) */
+/** ফুট → ফুট-ইঞ্চি (পূর্ণ ইঞ্চি — নিকটতম পূর্ণ সংখ্যায় রাউন্ড; ২.৪ → ২, ৮.৯ → ৯) */
 export function ftIn(ft: number) {
-  const tin = Math.round(ft * 12 * 10) / 10;
-  let f = Math.floor(tin / 12 + 1e-9);
-  let i = Math.round((tin - f * 12) * 10) / 10;
-  if (i >= 12) {
-    f += 1;
-    i = 0;
-  }
-  return { txt: `${toBn(f)} ফুট ${nice(i, 1)} ইঞ্চি`, short: `${toBn(f)}′ ${nice(i, 1)}″` };
+  const totalIn = Math.round(ft * 12);
+  const f = Math.floor(totalIn / 12);
+  const i = totalIn % 12;
+  return { txt: `${toBn(f)} ফুট ${toBn(i)} ইঞ্চি`, short: `${toBn(f)}′ ${toBn(i)}″` };
 }
 
 /* ---------- সাম্প্রতিক ---------- */
@@ -83,19 +93,34 @@ const loadHist = (): Hist[] => {
 
 const QUICK_LEN = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60, 75, 80, 100];
 const QUICK_AREA = [1, 2, 3, 5, 10, 15, 20, 25, 33, 50, 100, 160];
+/** বিজোড় সংখ্যার সাজেশন — ট্যাপ করলে ওই সংখ্যা লিংক (বা শতাংশ) হিসেবে বসে */
+const SUGGESTIONS = [5, 15, 25, 35];
+
+const LINK_KEYS = ['7', '8', '9', 'del', '4', '5', '6', 'AC', '1', '2', '3', 'swap', '.', '0', '00', 'eq'];
+const NORMAL_KEYS = ['AC', '%', '⌫', '÷', '7', '8', '9', '×', '4', '5', '6', '−', '1', '2', '3', '+', '±', '0', '.', '='];
+
+const OP_SYM: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' };
 
 export const ConverterScreen: React.FC = () => {
+  const [mode, setMode] = useState<'link' | 'normal'>('link');
   const [kind, setKind] = useState<Kind>('len');
   const [from, setFrom] = useState('link');
   const [to, setTo] = useState('ftin');
   const [v, setV] = useState('10');
   const [hist, setHist] = useState<Hist[]>(loadHist);
-  const [sheet, setSheet] = useState(false);
+  const [sheet, setSheet] = useState<'quick' | 'history' | null>(null);
   const [toast, setToast] = useState('');
   const toastTimer = useRef<number | undefined>(undefined);
   const histTimer = useRef<number | undefined>(undefined);
 
-  const say = (m: string) => {
+  // সাধারণ ক্যালকুলেটরের স্টেট
+  const [nDisplay, setNDisplay] = useState('0');
+  const [nAcc, setNAcc] = useState<number | null>(null);
+  const [nOp, setNOp] = useState<string | null>(null);
+  const [nWaiting, setNWaiting] = useState(false);
+  const [nExpr, setNExpr] = useState('');
+
+  const showToast = (m: string) => {
     setToast(m);
     window.clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(''), 1800);
@@ -111,6 +136,15 @@ export const ConverterScreen: React.FC = () => {
     },
     []
   );
+
+  /** কী-প্যাডে যেই কি-তে ট্যাপ হবে ভাইব্রেট করবে (২৪ নভেম্বর Founder) */
+  const buzz = () => {
+    try {
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(10);
+    } catch {
+      /* ভাইব্রেশন সমর্থন নেই — চুপচাপ */
+    }
+  };
 
   // বাছাই করা চিপ সারির বাইরে চলে গেলে দেখা যায় এমন জায়গায় আনা
   const fromRow = useRef<HTMLDivElement>(null);
@@ -148,20 +182,18 @@ export const ConverterScreen: React.FC = () => {
   const u = unitOf(kind, from);
   const base = num * u.f; // ফুট বা বর্গফুট
 
+  // ফলাফল — শুধু বদলানো মান; সমীকরণ/মোট লাইন নেই
   const result = useMemo(() => {
-    // ফলাফল সবসময় পুরো সমীকরণ — "১০ লিংক = ৬ ফুট ৭.২ ইঞ্চি" — যাতে কোনটা
-    // কিসের সমান, তা এক নজরে বোঝা যায় (২৪ নভেম্বর Founder)
-    const lhs = `${toBn(v || '0')} ${u.t}`;
-    if (to === 'ftin') return { main: `${lhs} = ${ftIn(base).txt}`, sub: `মোট ${nice(base)} ফুট` };
+    if (!v || isNaN(num)) return { value: '', copy: '' };
+    const lhs = `${toBn(v)} ${u.t}`;
+    if (to === 'ftin') {
+      const conv = ftIn(base);
+      return { value: conv.txt, copy: `${lhs} = ${conv.txt}` };
+    }
     const t = unitOf(kind, to);
-    const sub =
-      kind === 'len'
-        ? `= ${ftIn(base).short}`
-        : to === 'sqft'
-        ? `= ${nice(base / SQFT_PER_DEC, 4)} শতাংশ`
-        : `= ${nice(base, 1)} বর্গফুট`;
-    return { main: `${lhs} = ${nice(base / t.f, 4)} ${t.t}`, sub };
-  }, [base, kind, to, v, u.t]);
+    const val = `${nice(base / t.f, 4)} ${t.t}`;
+    return { value: val, copy: `${lhs} = ${val}` };
+  }, [base, kind, to, v, u.t, num]);
 
   const pushHist = (k: Kind, f: string, val: string) => {
     if (!(parseFloat(val) > 0)) return;
@@ -189,32 +221,34 @@ export const ConverterScreen: React.FC = () => {
     if (to === key) setTo(kind === 'len' ? 'ftin' : key === 'sqft' ? 'dec' : 'sqft');
   };
 
-  /** কী-প্যাডে যেই কি-তে ট্যাপ হবে ভাইব্রেট করবে (২৪ নভেম্বর Founder) */
-  const buzz = () => {
-    try {
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(10);
-    } catch {
-      /* ভাইব্রেশন সমর্থন নেই — চুপচাপ */
-    }
+  const pickSuggest = (n: number) => {
+    buzz();
+    const f = kind === 'len' ? 'link' : 'dec';
+    setFrom(f);
+    setV(String(n));
+    pushHist(kind, f, String(n));
   };
 
   const press = (key: string) => {
     buzz();
     let next = v;
-    let f = from;
     if (key === 'del') next = v.slice(0, -1);
-    else if (key === 'C') next = '';
-    else if (key.startsWith('q')) {
-      next = key.slice(1);
-      f = kind === 'len' ? 'link' : 'dec';
-      setFrom(f);
-      if (to === f) setTo(kind === 'len' ? 'ftin' : 'sqft');
-      pushHist(kind, f, next);
+    else if (key === 'AC') next = '';
+    else if (key === 'swap') {
+      swap();
+      return;
+    } else if (key === 'eq') {
+      void copyResult();
+      return;
     } else if (key === '.') {
       if (!v.includes('.')) next = (v || '0') + '.';
-    } else if (v.replace('.', '').length < 9) next = (v === '0' ? '' : v) + key;
+    } else if (key === '00') {
+      if (v !== '' && v !== '0' && v.replace('.', '').length < 9) next = v + '00';
+    } else if (v.replace('.', '').length < 9) {
+      next = (v === '0' ? '' : v) + key;
+    }
     setV(next);
-    if (!key.startsWith('q')) scheduleHist(kind, f, next);
+    scheduleHist(kind, from, next);
   };
 
   const swap = () => {
@@ -229,17 +263,18 @@ export const ConverterScreen: React.FC = () => {
       setV(String(+(base / unitOf(kind, nf).f).toFixed(4)));
       setTo(from);
     }
-    say('উল্টে দেওয়া হলো');
+    showToast('উল্টে দেওয়া হলো');
   };
 
   const copyResult = async () => {
     buzz();
-    const txt = result.main; // main-এই পুরো সমীকরণ আছে ("১০ লিংক = ৬ ফুট ৭.২ ইঞ্চি")
+    const txt = mode === 'link' ? result.copy : toBn(fmtNum(parseFloat(nDisplay)));
+    if (!txt) return;
     try {
       await navigator.clipboard.writeText(txt);
-      say('ফলাফল কপি হলো');
+      showToast('ফলাফল কপি হলো');
     } catch {
-      say(txt);
+      showToast(txt);
     }
   };
 
@@ -260,237 +295,464 @@ export const ConverterScreen: React.FC = () => {
   const toList: Unit[] = (kind === 'len' ? [{ k: 'ftin', t: 'ফুট-ইঞ্চি', f: 1 }] : []).concat(
     LIST(kind).filter((x) => x.k !== from)
   );
-  const keys = ['7', '8', '9', 'del', '4', '5', '6', 'C', '1', '2', '3', 'q10', '.', '0', '00', 'q100'];
   const qUnit = kind === 'len' ? 'লিংক' : 'শতাংশ';
 
-  const chip = (on: boolean, gold = false, compact = false) =>
-    `shrink-0 min-h-[48px] ${compact ? 'px-3' : 'px-3.5'} rounded-full border-[1.5px] text-[15px] font-bold transition active:scale-95 ${
-      on
-        ? gold
-          ? 'bg-gradient-to-br from-amber-200 to-amber-500 text-amber-950 border-transparent'
-          : 'bg-[#065f46] text-amber-200 border-[#065f46]'
-        : 'bg-white border-slate-300 text-slate-700'
+  // ---- সাধারণ ক্যালকুলেটর ----
+  const fmtNum = (n: number) => {
+    if (!isFinite(n) || Number.isNaN(n)) return '0';
+    return String(Math.round(n * 1e10) / 1e10);
+  };
+  const calcOp = (a: number, b: number, op: string) => {
+    if (op === '+') return a + b;
+    if (op === '-') return a - b;
+    if (op === '*') return a * b;
+    if (op === '/') return b === 0 ? NaN : a / b;
+    return b;
+  };
+  const nDigit = (d: string) => {
+    buzz();
+    if (nWaiting) {
+      setNDisplay(d);
+      setNWaiting(false);
+    } else {
+      setNDisplay((p) => (p === '0' ? d : p.length >= 12 ? p : p + d));
+    }
+  };
+  const nDot = () => {
+    buzz();
+    if (nWaiting) {
+      setNDisplay('0.');
+      setNWaiting(false);
+    } else if (!nDisplay.includes('.')) {
+      setNDisplay((p) => p + '.');
+    }
+  };
+  const nOpPress = (op: string) => {
+    buzz();
+    const cur = parseFloat(nDisplay);
+    let acc = nAcc;
+    if (acc !== null && nOp && !nWaiting) {
+      const r = calcOp(acc, cur, nOp);
+      if (!isFinite(r) || Number.isNaN(r)) {
+        showToast('শূন্য দিয়ে ভাগ করা যায় না');
+        return;
+      }
+      acc = r;
+    } else {
+      acc = cur;
+    }
+    setNAcc(acc);
+    setNOp(op);
+    setNWaiting(true);
+    setNDisplay(fmtNum(acc));
+    setNExpr(`${toBn(fmtNum(acc))} ${OP_SYM[op]}`);
+  };
+  const nEquals = () => {
+    buzz();
+    if (nAcc === null || !nOp) return;
+    const cur = parseFloat(nDisplay);
+    const r = calcOp(nAcc, cur, nOp);
+    if (!isFinite(r) || Number.isNaN(r)) {
+      showToast('শূন্য দিয়ে ভাগ করা যায় না');
+      return;
+    }
+    setNExpr(`${toBn(fmtNum(nAcc))} ${OP_SYM[nOp]} ${toBn(fmtNum(cur))} =`);
+    setNDisplay(fmtNum(r));
+    setNAcc(null);
+    setNOp(null);
+    setNWaiting(true);
+  };
+  const nPercent = () => {
+    buzz();
+    setNDisplay(fmtNum(parseFloat(nDisplay) / 100));
+  };
+  const nNegate = () => {
+    buzz();
+    if (nDisplay !== '0') setNDisplay((p) => (p.startsWith('-') ? p.slice(1) : `-${p}`));
+  };
+  const nBack = () => {
+    buzz();
+    if (nWaiting) return;
+    setNDisplay((p) => (p.length <= 1 ? '0' : p.slice(0, -1)));
+  };
+  const nClear = () => {
+    buzz();
+    setNDisplay('0');
+    setNAcc(null);
+    setNOp(null);
+    setNWaiting(false);
+    setNExpr('');
+  };
+  const nPress = (k: string) => {
+    if (k >= '0' && k <= '9') return nDigit(k);
+    if (k === '.') return nDot();
+    if (k === 'AC') return nClear();
+    if (k === '%') return nPercent();
+    if (k === '⌫') return nBack();
+    if (k === '±') return nNegate();
+    if (k === '=') return nEquals();
+    if (k === '÷') return nOpPress('/');
+    if (k === '×') return nOpPress('*');
+    if (k === '−') return nOpPress('-');
+    if (k === '+') return nOpPress('+');
+  };
+
+  const chip = (on: boolean) =>
+    `shrink-0 min-h-[40px] px-3 rounded-full border text-[14px] font-medium transition active:scale-95 ${
+      on ? 'bg-[#065f46] text-amber-200 border-transparent' : 'bg-[#2b2b2b] border-[#3d3d3d] text-[#e5e5e5]'
     }`;
 
-  // min-h/mt-auto নেই — আগে min-h-[calc(100dvh-70px)] + mt-auto-তে
-  // কী-প্যাডের উপরে ~৩৩০px ফাঁকা জায়গা তৈরি হয়ে নিচের সারি
-  // ন্যাভের আড়ালে চলে যেত; এখন সব কনটেন্ট পরপর বসে
+  const keyClass = (k: string, m: 'link' | 'normal') => {
+    const base =
+      'flex h-[68px] w-[68px] items-center justify-center rounded-full text-white transition-transform active:scale-95';
+    if (k === '=' || k === 'eq') return `${base} bg-[#1e9bd8] text-[36px] font-normal`;
+    if (m === 'link') {
+      if (k === 'del' || k === 'AC' || k === 'swap') return `${base} bg-[#5c5c5c] text-[26px] font-normal`;
+      return `${base} bg-[#2e2e2e] text-[42px] font-normal`;
+    }
+    if (k === 'AC' || k === '%' || k === '⌫' || k === '±') return `${base} bg-[#5c5c5c] text-[26px] font-normal`;
+    if (k === '÷' || k === '×' || k === '−' || k === '+') return `${base} bg-[#6b6b6b] text-[32px] font-normal`;
+    return `${base} bg-[#2e2e2e] text-[42px] font-normal`;
+  };
+
   return (
-    <div id="converter-screen" className="-mx-3.5 sm:mx-0 -mt-3.5 pb-2 bg-gradient-to-b from-[#e7f0e9] via-[#f1f5f2] to-[#e9f1ea] flex flex-col">
-      {/* দৈর্ঘ্য / ক্ষেত্রফল — প্রিমিয়াম পিল ট্যাব */}
-      <div className="mx-3 mt-1.5 rounded-full bg-white p-1 shadow-[0_2px_10px_rgba(6,95,70,.10)] flex" role="tablist">
-        {(
-          [
-            ['len', 'দৈর্ঘ্য (বাহু)'],
-            ['area', 'ক্ষেত্রফল (জমি)'],
-          ] as Array<[Kind, string]>
-        ).map(([k, t]) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={kind === k}
-            onClick={() => {
-              buzz();
-              switchKind(k);
-            }}
-            className={`flex-1 min-h-[48px] rounded-full text-base font-bold transition active:scale-[.98] ${
-              kind === k ? 'bg-[#065f46] text-amber-200 shadow' : 'text-slate-500'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {/* বড় ডিসপ্লে — সোনালি কিনারাসহ প্রিমিয়াম কার্ড */}
-      <div className="relative mx-3 mt-1.5 bg-[#065f46] rounded-3xl px-4 pt-2 pb-2 text-white shadow-[0_10px_24px_rgba(6,95,70,.28)] ring-1 ring-amber-300/60">
+    <div
+      id="converter-screen"
+      className="relative -mx-3.5 flex min-h-[calc(100dvh-65px)] flex-col bg-black px-3 pb-6 pt-2 text-white sm:-mx-6"
+    >
+      {/* উপরের সারি: কপি + শিরোনাম + ইতিহাস + মোড সুইচ */}
+      <div className="flex items-center gap-2">
         <button
-          onClick={swap}
-          aria-label="উল্টান"
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-gradient-to-br from-amber-200 to-amber-600 text-amber-950 flex items-center justify-center shadow-md active:scale-95 transition"
+          type="button"
+          aria-label="কপি করুন"
+          onClick={copyResult}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2b2b2b] text-white transition-transform active:scale-95"
         >
-          <ArrowUpDown className="w-6 h-6" />
+          <Copy className="h-5 w-5" />
         </button>
-        <div className="flex items-baseline justify-end gap-1.5 min-h-[36px] pl-14">
-          <strong className="text-[30px] font-extrabold leading-tight tracking-wide break-all">{v ? toBn(v) : '০'}</strong>
-          <span className="w-[3px] h-[26px] bg-amber-400 self-center animate-pulse" aria-hidden="true" />
-          <span className="text-[17px] font-bold text-emerald-200">{u.t}</span>
-        </div>
-        <div className="h-[1.5px] bg-amber-200/35 my-1 ml-14" />
-        <button onClick={copyResult} className="block w-full text-right pl-14" aria-label="ফলাফল কপি করুন">
-          <b className="block text-[20px] font-extrabold text-amber-200 leading-tight break-words">{result.main}</b>
-          <small className="text-sm font-bold text-emerald-200">{result.sub}</small>
-        </button>
-      </div>
-
-      {/* থেকে / কিসে — একটাই সাদা কার্ডে গোছানো; ক্ষেত্রফলে ডানে আরও চিপ থাকলে ফেড + "›" দেখায়।
-          দৈর্ঘ্যে মাত্র ৪টি চিপ (লিংক, ফুট, ইঞ্চি, মিটার) — এক সারিতে আঁটে, স্ক্রল নেই */}
-      <div className="mx-3 mt-1.5 rounded-3xl bg-white shadow-[0_2px_10px_rgba(15,23,42,.07)] px-3 py-1.5">
-        <div className="flex items-center gap-1.5">
-          <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">থেকে</span>
-          <div className="relative flex-1 min-w-0">
-            <div ref={fromRow} onScroll={updateScrollHints} className={kind === 'len' ? 'flex gap-1.5' : 'flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar'}>
-              {LIST(kind).map((x) => (
-                <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from, false, kind === 'len')} aria-pressed={x.k === from}>
-                  {x.t}
-                </button>
-              ))}
-            </div>
-            {kind !== 'len' && fromMore && (
-              <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white via-white/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
-                <b className="text-[#065f46] text-lg leading-none">›</b>
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="h-px bg-slate-100 my-1.5" />
-        <div className="flex items-center gap-1.5">
-          <span className="shrink-0 w-[38px] text-sm font-extrabold text-[#065f46] leading-tight">কিসে</span>
-          <div className="relative flex-1 min-w-0">
-            <div ref={toRow} onScroll={updateScrollHints} className={kind === 'len' ? 'flex gap-1.5' : 'flex gap-1.5 overflow-x-auto pr-3 pb-0.5 no-scrollbar'}>
-              {toList.map((x) => (
-                <button
-                  key={x.k}
-                  onClick={() => {
-                    buzz();
-                    setTo(x.k);
-                  }}
-                  className={chip(x.k === to, true, kind === 'len')}
-                  aria-pressed={x.k === to}
-                >
-                  {x.t}
-                </button>
-              ))}
-            </div>
-            {kind !== 'len' && toMore && (
-              <span className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-white via-white/80 to-transparent flex items-center justify-end pr-1" aria-hidden="true">
-                <b className="text-[#065f46] text-lg leading-none">›</b>
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* দ্রুত টেবিল + সাম্প্রতিক — সাদা কার্ডে */}
-      <div className="mx-3 mt-1.5 rounded-3xl bg-white shadow-[0_2px_10px_rgba(15,23,42,.07)] px-2 py-1.5 flex gap-1.5 overflow-x-auto no-scrollbar">
+        <span className="min-w-0 flex-1 truncate text-[16px] font-medium">ক্যালকুলেটর</span>
         <button
+          type="button"
+          aria-label="ইতিহাস"
           onClick={() => {
             buzz();
-            setSheet(true);
+            setSheet('history');
           }}
-          className="shrink-0 min-h-[44px] px-3 rounded-2xl bg-[#065f46] text-amber-200 text-sm font-bold flex items-center gap-1.5 active:scale-95 transition"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#2b2b2b] text-white transition-transform active:scale-95"
         >
-          <Table2 className="w-[18px] h-[18px]" />
-          দ্রুত টেবিল
+          <Clock className="h-5 w-5" />
         </button>
-        {hist.map((h, i) => {
-          const t = histText(h);
-          return (
+        <button
+          type="button"
+          data-mode-switch
+          onClick={() => {
+            buzz();
+            setMode((m) => (m === 'link' ? 'normal' : 'link'));
+          }}
+          className="flex h-11 shrink-0 items-center gap-1 rounded-full bg-[#2b2b2b] px-2.5 text-[11px] font-medium text-white transition-transform active:scale-95"
+        >
+          <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" />
+          {mode === 'link' ? 'Link Calculator' : 'Normal Calculator'}
+        </button>
+      </div>
+
+      {mode === 'link' ? (
+        <>
+          {/* ডিসপ্লে — শুধু ২ লাইন: ইনপুট + ফলাফল (কোনো সমীকরণ/মোট লাইন নেই) */}
+          <div className="mt-3 text-right" data-display>
+            <div className="flex min-h-[52px] items-center justify-end gap-1" data-display-input>
+              <span className="truncate text-[40px] font-normal leading-none">{v === '' ? '০' : toBn(v)}</span>
+              <span className="shrink-0 text-[17px] font-normal text-neutral-400">{u.t}</span>
+              <span className="ml-1 inline-block h-[30px] w-[3px] shrink-0 animate-pulse bg-[#1e9bd8]" />
+            </div>
             <button
-              key={h.join() + i}
+              type="button"
+              onClick={copyResult}
+              data-display-result
+              className="mt-1 block w-full truncate text-right text-[28px] font-normal leading-tight text-amber-200"
+              aria-label="ফলাফল কপি করুন"
+            >
+              {result.value === '' ? '—' : result.value}
+            </button>
+          </div>
+
+          {/* ধরন (দৈর্ঘ্য/ক্ষেত্রফল) ছোট সিলেক্টর + থেকে/কিসে মাঝারি চিপ */}
+          <div className="mt-3 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-3">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-[13px] font-medium text-neutral-400">ধরন</span>
+              <div className="flex items-center gap-1.5">
+                {(['len', 'area'] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    data-kind={k}
+                    aria-pressed={kind === k}
+                    onClick={() => switchKind(k)}
+                    className={`min-h-[32px] rounded-full px-3 text-[13px] font-medium transition-colors ${
+                      kind === k ? 'bg-[#065f46] text-amber-200' : 'border border-[#3d3d3d] bg-[#2b2b2b] text-[#e5e5e5]'
+                    }`}
+                  >
+                    {k === 'len' ? 'দৈর্ঘ্য' : 'ক্ষেত্রফল'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-2.5 flex items-center gap-1.5">
+              <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
+              <div className="relative min-w-0 flex-1">
+                <div
+                  ref={fromRow}
+                  onScroll={updateScrollHints}
+                  data-row="from"
+                  className={kind === 'len' ? 'flex gap-1.5' : 'flex gap-1.5 overflow-x-auto pb-0.5 pr-3 no-scrollbar'}
+                >
+                  {LIST(kind).map((x) => (
+                    <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
+                      {x.t}
+                    </button>
+                  ))}
+                </div>
+                {kind !== 'len' && fromMore && (
+                  <span
+                    className="pointer-events-none absolute bottom-0 right-0 top-0 flex w-10 items-center justify-end bg-gradient-to-l from-[#141414] via-[#141414]/80 to-transparent pr-1"
+                    aria-hidden="true"
+                  >
+                    <b className="text-lg leading-none text-amber-200">›</b>
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="my-1.5 h-px bg-[#2a2a2a]" />
+            <div className="flex items-center gap-1.5">
+              <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">কিসে</span>
+              <div className="relative min-w-0 flex-1">
+                <div
+                  ref={toRow}
+                  onScroll={updateScrollHints}
+                  data-row="to"
+                  className={kind === 'len' ? 'flex gap-1.5' : 'flex gap-1.5 overflow-x-auto pb-0.5 pr-3 no-scrollbar'}
+                >
+                  {toList.map((x) => (
+                    <button
+                      key={x.k}
+                      onClick={() => {
+                        buzz();
+                        setTo(x.k);
+                      }}
+                      className={chip(x.k === to)}
+                      aria-pressed={x.k === to}
+                    >
+                      {x.t}
+                    </button>
+                  ))}
+                </div>
+                {kind !== 'len' && toMore && (
+                  <span
+                    className="pointer-events-none absolute bottom-0 right-0 top-0 flex w-10 items-center justify-end bg-gradient-to-l from-[#141414] via-[#141414]/80 to-transparent pr-1"
+                    aria-hidden="true"
+                  >
+                    <b className="text-lg leading-none text-amber-200">›</b>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* দ্রুত টেবিল + বিজোড় সাজেশন (৫/১৫/২৫/৩৫) */}
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
               onClick={() => {
                 buzz();
-                setKind(h[0]);
-                setFrom(h[1]);
-                setV(h[2]);
-                setTo(h[0] === 'len' ? 'ftin' : h[1] === 'sqft' ? 'dec' : 'sqft');
+                setSheet('quick');
               }}
-              className="shrink-0 min-h-[44px] px-3 rounded-2xl bg-slate-50 border-[1.5px] border-slate-200 text-sm font-bold text-slate-700 flex items-center gap-1.5 whitespace-nowrap active:scale-95 transition"
+              className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
             >
-              <Clock className="w-[18px] h-[18px] text-[#065f46]" />
-              {t.a} <b className="text-[#065f46]">{t.b}</b>
+              <Table2 className="h-4 w-4" />
+              দ্রুত টেবিল
             </button>
-          );
-        })}
-      </div>
+            {SUGGESTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                data-suggest={n}
+                onClick={() => pickSuggest(n)}
+                className="flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
+              >
+                {toBn(n)}
+              </button>
+            ))}
+          </div>
 
-      {/* নিজস্ব কী-প্যাড (ফোনের কীবোর্ড লাগে না) — সাদা কার্ডে; mt-auto নেই (উপরে ফাঁকা জায়গা তৈরি করত) */}
-      <div className="mx-3 mt-1.5">
-        <div className="rounded-3xl bg-white shadow-[0_2px_10px_rgba(15,23,42,.07)] p-1.5 grid grid-cols-4 gap-1">
-        {keys.map((k) =>
-          k === 'del' ? (
-            <button key={k} onClick={() => press(k)} aria-label="একটা মুছুন" className="h-[54px] rounded-2xl bg-emerald-50 text-[#065f46] shadow-[0_2px_4px_rgba(15,23,42,.08)] flex items-center justify-center active:scale-95 transition">
-              <Delete className="w-7 h-7" />
-            </button>
-          ) : k === 'C' ? (
-            <button key={k} onClick={() => press(k)} className="h-[54px] rounded-2xl bg-red-50 text-red-600 text-lg font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] active:scale-95 transition">
-              মুছুন
-            </button>
-          ) : k.startsWith('q') ? (
-            <button key={k} onClick={() => press(k)} className="h-[54px] rounded-2xl bg-amber-50 text-amber-800 text-[15px] font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] leading-tight px-1 active:scale-95 transition">
-              {toBn(k.slice(1))} {qUnit}
-            </button>
-          ) : (
-            <button key={k} onClick={() => press(k)} className="h-[54px] rounded-2xl bg-slate-50 text-slate-900 text-4xl font-extrabold shadow-[0_2px_4px_rgba(15,23,42,.08)] active:scale-95 transition">
-              {toBn(k)}
-            </button>
-          )
-        )}
-        </div>
-      </div>
+          {/* কিপ্যাড — গোল, বড় সংখ্যা */}
+          <div className="mx-auto mt-2 grid w-fit grid-cols-4 gap-2">
+            {LINK_KEYS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                data-key={k}
+                aria-label={
+                  k === 'del' ? 'একটা মুছুন' : k === 'AC' ? 'সব মুছুন' : k === 'swap' ? 'অদলবদল' : k === 'eq' ? 'সমান (কপি)' : k
+                }
+                onClick={() => press(k)}
+                className={keyClass(k, 'link')}
+              >
+                {k === 'del' ? (
+                  <Delete className="h-7 w-7" />
+                ) : k === 'swap' ? (
+                  <ArrowLeftRight className="h-6 w-6" />
+                ) : k === 'eq' ? (
+                  '='
+                ) : (
+                  toBn(k)
+                )}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* সাধারণ ক্যালকুলেটর ডিসপ্লে */}
+          <div className="mt-3 min-h-[120px] text-right" data-normal-display-wrap>
+            <div className="flex min-h-[24px] items-center justify-end text-[16px] font-normal text-neutral-400" data-normal-expr>
+              {nExpr || ' '}
+            </div>
+            <div className="mt-1 truncate text-[44px] font-normal leading-tight" data-normal-display>
+              {toBn(nDisplay)}
+            </div>
+          </div>
 
-      {/* দ্রুত টেবিল শিট */}
-      <div
-        aria-hidden="true"
-        onClick={() => setSheet(false)}
-        className={`fixed inset-0 z-[55] bg-slate-900/45 transition-opacity ${sheet ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-      />
-      <div
-        role="dialog"
-        aria-label="দ্রুত টেবিল"
-        inert={!sheet}
-        className={`fixed left-0 right-0 bottom-0 z-[56] max-h-[84dvh] overflow-y-auto bg-white rounded-t-3xl px-4 pt-2.5 pb-6 transition-transform duration-200 max-w-md mx-auto ${
-          sheet ? 'translate-y-0' : 'translate-y-[105%]'
-        }`}
-      >
-        <div className="w-11 h-[5px] rounded bg-slate-300 mx-auto mb-2.5" />
-        <div className="flex items-center gap-2 mb-1">
-          <b className="flex-1 text-lg font-extrabold text-[#065f46]">
-            দ্রুত টেবিল: {kind === 'len' ? 'লিংক → ফুট-ইঞ্চি' : 'শতাংশ → বর্গফুট'}
-          </b>
-          <button
-            onClick={() => {
-              buzz();
-              setSheet(false);
-            }}
-            aria-label="বন্ধ"
-            className="w-11 h-11 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 transition"
+          {/* সাধারণ ক্যালকুলেটর কিপ্যাড — স্ক্রিনশটের মতো */}
+          <div className="mx-auto mt-2 grid w-fit grid-cols-4 gap-2">
+            {NORMAL_KEYS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                data-key={k}
+                aria-label={k === '⌫' ? 'একটা মুছুন' : k === 'AC' ? 'সব মুছুন' : k}
+                onClick={() => nPress(k)}
+                className={keyClass(k, 'normal')}
+              >
+                {k === '⌫' ? <Delete className="h-7 w-7" /> : toBn(k)}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* দ্রুত টেবিল শিট (ডার্ক) */}
+      {sheet === 'quick' && (
+        <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/60" onClick={() => setSheet(null)}>
+          <div
+            role="dialog"
+            aria-label="দ্রুত টেবিল"
+            className="max-h-[84dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-[#111111] px-4 pb-6 pt-2.5 text-white"
+            onClick={(e) => e.stopPropagation()}
           >
-            <X className="w-[22px] h-[22px]" />
-          </button>
+            <div className="mx-auto mb-2.5 h-[5px] w-11 rounded bg-[#3d3d3d]" />
+            <div className="mb-1 flex items-center gap-2">
+              <b className="flex-1 text-lg font-medium">দ্রুত টেবিল: {kind === 'len' ? 'লিংক → ফুট-ইঞ্চি' : 'শতাংশ → বর্গফুট'}</b>
+              <button
+                type="button"
+                aria-label="বন্ধ করুন"
+                onClick={() => setSheet(null)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2b2b2b] text-white"
+              >
+                <X className="h-[22px] w-[22px]" />
+              </button>
+            </div>
+            <p className="mb-2 text-sm font-medium text-neutral-400">যেকোনো সারিতে চাপলে ওপরের ডিসপ্লেতে বসে যাবে</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(kind === 'len' ? QUICK_LEN : QUICK_AREA).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {
+                    buzz();
+                    const f = kind === 'len' ? 'link' : 'dec';
+                    setFrom(f);
+                    setV(String(n));
+                    if (to === f) setTo(kind === 'len' ? 'ftin' : 'sqft');
+                    pushHist(kind, f, String(n));
+                    setSheet(null);
+                  }}
+                  className="flex min-h-[52px] items-center justify-between rounded-2xl bg-[#1f1f1f] px-3 text-[15px] font-medium active:bg-[#2b2b2b]"
+                >
+                  <span>
+                    {toBn(n)} {qUnit}
+                  </span>
+                  <b className="font-medium text-emerald-300">
+                    {kind === 'len' ? ftIn(n * 0.66).short : nice(n * SQFT_PER_DEC, 1)}
+                  </b>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
-        <p className="text-sm text-slate-500 font-semibold mb-2">যেকোনো সারিতে চাপলে ওপরের ডিসপ্লেতে বসে যাবে</p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {(kind === 'len' ? QUICK_LEN : QUICK_AREA).map((n) => (
-            <button
-              key={n}
-              onClick={() => {
-                buzz();
-                const f = kind === 'len' ? 'link' : 'dec';
-                setFrom(f);
-                setV(String(n));
-                if (to === f) setTo(kind === 'len' ? 'ftin' : 'sqft');
-                pushHist(kind, f, String(n));
-                setSheet(false);
-              }}
-              className="min-h-[52px] rounded-2xl bg-slate-100 flex items-center justify-between px-3 text-[15px] font-bold active:bg-emerald-50"
-            >
-              <span>
-                {toBn(n)} {qUnit}
-              </span>
-              <b className="text-[#065f46] font-extrabold">
-                {kind === 'len' ? ftIn(n * 0.66).short : nice(n * SQFT_PER_DEC, 1)}
-              </b>
-            </button>
-          ))}
+      )}
+
+      {/* ইতিহাস শিট — ঘড়ি আইকন থেকে খোলে */}
+      {sheet === 'history' && (
+        <div className="fixed inset-0 z-[55] flex items-end justify-center bg-black/60" onClick={() => setSheet(null)}>
+          <div
+            role="dialog"
+            aria-label="ইতিহাস"
+            className="max-h-[84dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-[#111111] px-4 pb-6 pt-2.5 text-white"
+            onClick={(e) => e.stopPropagation()}
+            data-history-sheet
+          >
+            <div className="mx-auto mb-2.5 h-[5px] w-11 rounded bg-[#3d3d3d]" />
+            <div className="mb-3 flex items-center justify-between">
+              <b className="text-lg font-medium">ইতিহাস</b>
+              <button
+                type="button"
+                aria-label="বন্ধ করুন"
+                onClick={() => setSheet(null)}
+                className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2b2b2b] text-white"
+              >
+                <X className="h-[22px] w-[22px]" />
+              </button>
+            </div>
+            {hist.length === 0 ? (
+              <p className="py-6 text-center text-[15px] text-neutral-400">এখনো কোনো হিসাব নেই</p>
+            ) : (
+              <div className="space-y-1.5">
+                {hist.map((h, i) => {
+                  const t = histText(h);
+                  return (
+                    <button
+                      key={h.join() + i}
+                      type="button"
+                      data-history-row
+                      onClick={() => {
+                        buzz();
+                        setKind(h[0]);
+                        setFrom(h[1]);
+                        setV(h[2]);
+                        setTo(h[0] === 'len' ? 'ftin' : h[1] === 'sqft' ? 'dec' : 'sqft');
+                        setMode('link');
+                        setSheet(null);
+                      }}
+                      className="flex w-full items-center justify-between rounded-2xl bg-[#1f1f1f] px-3 py-2.5 text-left"
+                    >
+                      <span className="text-[15px] font-medium">
+                        {t.a} <b className="font-medium text-emerald-300">{t.b}</b>
+                      </span>
+                      <span className="text-[13px] text-neutral-400">আবার</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ছোট বার্তা */}
       <div
         role="status"
-        className={`fixed left-1/2 bottom-28 -translate-x-1/2 z-[57] bg-slate-900 text-white text-[15px] font-semibold px-4 py-2.5 rounded-2xl max-w-[88vw] text-center transition-all ${
-          toast ? 'opacity-100' : 'opacity-0 translate-y-3 pointer-events-none'
+        className={`fixed bottom-28 left-1/2 z-[57] max-w-[88vw] -translate-x-1/2 rounded-2xl bg-[#2b2b2b] px-4 py-2.5 text-center text-[15px] font-medium text-white transition-all ${
+          toast ? 'opacity-100' : 'pointer-events-none translate-y-3 opacity-0'
         }`}
       >
         {toast}

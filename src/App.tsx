@@ -125,6 +125,11 @@ export default function App() {
     (currentScreen.screenId === 'possession' || currentScreen.screenId === 'measure_possession') &&
     surveyTab === 'drawing_based';
 
+  // ক্যালকুলেটর স্ক্রিন খোলা আছে কি না — খোলা থাকলে নিচের বার (BottomNav)
+  // লুকিয়ে ক্যালকুলেটরকে পুরো জায়গা দেওয়া হয় (Founder, ২৬ নভেম্বর)।
+  // হেডার থাকে — ক্যালকুলেটর থেকে বের হতে হেডারের লোগো (হোম) / ☰ ব্যবহার করতে হয়।
+  const isCalculatorScreen = currentScreen.screenId === 'converter';
+
   // Modal State
   const [showChatModal, setShowChatModal] = useState<boolean>(false);
   // ফিল্ড আমিন: সাইড প্যানেল (☰)
@@ -458,7 +463,7 @@ export default function App() {
   /**
    * Mapping active screen to BottomNav tab highlight
    */
-  // ফিল্ড আমিন: নিচের বারে ৪টা ট্যাব — হোম · দখল পরিমাপ · কনভার্টার · রিপোর্ট
+  // ফিল্ড আমিন: নিচের বারে ৪টা ট্যাব — হোম · দখল পরিমাপ · ক্যালকুলেটর · রিপোর্ট
   const activeNavTab: NavTab | null = (() => {
     switch (currentScreen.screenId) {
       case 'home':
@@ -538,7 +543,11 @@ export default function App() {
       <ErrorBoundary>
       <main
         className={`flex-1 max-w-4xl w-full mx-auto px-3.5 sm:px-6 print:max-w-none print:px-0 print:pt-0 print:pb-0 ${
-          currentScreen.screenId === 'survey' ? 'pt-2 pb-2 overflow-hidden' : 'pt-3.5 pb-36'
+          currentScreen.screenId === 'survey'
+            ? 'pt-2 pb-2 overflow-hidden'
+            : currentScreen.screenId === 'converter'
+            ? 'pt-0 pb-0'
+            : 'pt-3.5 pb-36'
         }`}
       >
         {/* 1. HOME SCREEN — P1 Mobile: 5 cards (দখল / ম্যাপ 3 / খতিয়ান / উত্তরাধিকার / দলিল) */}
@@ -843,7 +852,7 @@ export default function App() {
             />
           </Suspense>
         )}
-        {/* ফিল্ড আমিন: পরিমাপ কনভার্টার (নিচের বারের ট্যাব) */}
+        {/* ফিল্ড আমিন: পরিমাপ ক্যালকুলেটর (নিচের বারের ট্যাব) */}
         {currentScreen.screenId === 'converter' && <ConverterScreen />}
 
         {/* ফিল্ড আমিন: হ্যান্ড ম্যাপ (ধাপ ৬) */}
@@ -895,12 +904,10 @@ export default function App() {
         onNavigate={handleSideNavigate}
       />
 
-      {/* Simplified Bottom Navigation Bar */}
-      <BottomNav
-        currentTab={activeNavTab}
-        onSelectTab={handleSelectBottomNavTab}
-        lang={lang}
-      />
+      {/* Simplified Bottom Navigation Bar — ক্যালকুলেটর খোলা থাকলে লুকানো */}
+      {!isCalculatorScreen && (
+        <BottomNav currentTab={activeNavTab} onSelectTab={handleSelectBottomNavTab} lang={lang} />
+      )}
 
       {/* PWA Install Prompt */}
       <InstallPrompt lang={lang} />
