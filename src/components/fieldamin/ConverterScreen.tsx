@@ -9,6 +9,8 @@
  *
  * উপরে: কপি আইকন + "ক্যালকুলেটর" শিরোনাম + ইতিহাস (ঘড়ি) আইকন +
  * মোড সুইচ (Link Calculator ↔ Normal Calculator)।
+ * কিপ্যাড পুরো প্রস্থ জুড়ে — কি aspect-square w-full (২৬ নভেম্বর ০২:২৮,
+ * Founder: দুই পাশে খালি জায়গা ছিল); ধরন-পিল flex-1 (৫০/৫০)।
  * নিচের বার (BottomNav) এই স্ক্রিনে লুকানো থাকে — App.tsx দেখুন
  * (isCalculatorScreen)। হেডার থাকে, তাই বের হতে হেডারের লোগো/☰ ব্যবহার করতে হয়।
  *
@@ -404,7 +406,7 @@ export const ConverterScreen: React.FC = () => {
 
   const keyClass = (k: string, m: 'link' | 'normal') => {
     const base =
-      'flex h-[68px] w-[68px] items-center justify-center rounded-full text-white transition-transform active:scale-95';
+      'flex aspect-square w-full items-center justify-center rounded-full text-white transition-transform active:scale-95';
     if (k === '=' || k === 'eq') return `${base} bg-[#1e9bd8] text-[36px] font-normal`;
     if (m === 'link') {
       if (k === 'del' || k === 'AC' || k === 'swap') return `${base} bg-[#5c5c5c] text-[26px] font-normal`;
@@ -418,7 +420,7 @@ export const ConverterScreen: React.FC = () => {
   return (
     <div
       id="converter-screen"
-      className="relative -mx-3.5 flex min-h-[calc(100dvh-65px)] flex-col bg-black px-3 pb-6 pt-2 text-white sm:-mx-6"
+      className="relative -mx-3.5 flex min-h-[calc(100dvh-65px)] flex-col bg-black px-3 pb-4 pt-1 text-white sm:-mx-6"
     >
       {/* উপরের সারি: কপি + শিরোনাম + ইতিহাস + মোড সুইচ */}
       <div className="flex items-center gap-2">
@@ -459,8 +461,8 @@ export const ConverterScreen: React.FC = () => {
       {mode === 'link' ? (
         <>
           {/* ডিসপ্লে — শুধু ২ লাইন: ইনপুট + ফলাফল (কোনো সমীকরণ/মোট লাইন নেই) */}
-          <div className="mt-3 text-right" data-display>
-            <div className="flex min-h-[52px] items-center justify-end gap-1" data-display-input>
+          <div className="mt-2 text-right" data-display>
+            <div className="flex min-h-[44px] items-center justify-end gap-1" data-display-input>
               <span className="truncate text-[40px] font-normal leading-none">{v === '' ? '০' : toBn(v)}</span>
               <span className="shrink-0 text-[17px] font-normal text-neutral-400">{u.t}</span>
               <span className="ml-1 inline-block h-[30px] w-[3px] shrink-0 animate-pulse bg-[#1e9bd8]" />
@@ -477,10 +479,10 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* ধরন (দৈর্ঘ্য/ক্ষেত্রফল) ছোট সিলেক্টর + থেকে/কিসে মাঝারি চিপ */}
-          <div className="mt-3 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-3">
+          <div className="mt-2 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-2">
             <div className="flex items-center gap-2">
               <span className="shrink-0 text-[13px] font-medium text-neutral-400">ধরন</span>
-              <div className="flex items-center gap-1.5">
+              <div className="flex flex-1 items-center gap-1.5">
                 {(['len', 'area'] as const).map((k) => (
                   <button
                     key={k}
@@ -488,7 +490,7 @@ export const ConverterScreen: React.FC = () => {
                     data-kind={k}
                     aria-pressed={kind === k}
                     onClick={() => switchKind(k)}
-                    className={`min-h-[32px] rounded-full px-3 text-[13px] font-medium transition-colors ${
+                    className={`flex-1 min-h-[32px] rounded-full px-3 text-[13px] font-medium transition-colors ${
                       kind === k ? 'bg-[#065f46] text-amber-200' : 'border border-[#3d3d3d] bg-[#2b2b2b] text-[#e5e5e5]'
                     }`}
                   >
@@ -522,7 +524,7 @@ export const ConverterScreen: React.FC = () => {
                 )}
               </div>
             </div>
-            <div className="my-1.5 h-px bg-[#2a2a2a]" />
+            <div className="my-1 h-px bg-[#2a2a2a]" />
             <div className="flex items-center gap-1.5">
               <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">কিসে</span>
               <div className="relative min-w-0 flex-1">
@@ -559,14 +561,14 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* দ্রুত টেবিল + বিজোড় সাজেশন (৫/১৫/২৫/৩৫) */}
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-2">
             <button
               type="button"
               onClick={() => {
                 buzz();
                 setSheet('quick');
               }}
-              className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
+              className="flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
             >
               <Table2 className="h-4 w-4" />
               দ্রুত টেবিল
@@ -577,7 +579,7 @@ export const ConverterScreen: React.FC = () => {
                 type="button"
                 data-suggest={n}
                 onClick={() => pickSuggest(n)}
-                className="flex min-h-[44px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
+                className="flex min-h-[40px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
               >
                 {toBn(n)}
               </button>
@@ -585,7 +587,7 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* কিপ্যাড — গোল, বড় সংখ্যা */}
-          <div className="mx-auto mt-2 grid w-fit grid-cols-4 gap-2">
+          <div className="mt-1.5 grid w-full grid-cols-4 gap-2">
             {LINK_KEYS.map((k) => (
               <button
                 key={k}
@@ -623,7 +625,7 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* সাধারণ ক্যালকুলেটর কিপ্যাড — স্ক্রিনশটের মতো */}
-          <div className="mx-auto mt-2 grid w-fit grid-cols-4 gap-2">
+          <div className="mt-1.5 grid w-full grid-cols-4 gap-2">
             {NORMAL_KEYS.map((k) => (
               <button
                 key={k}
