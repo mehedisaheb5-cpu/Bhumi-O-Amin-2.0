@@ -47,6 +47,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, Clock, Copy, Delete, Table2, X } from 'lucide-react';
+import { AppLogo } from '../brand/AppLogo';
 import './calculator-font.css';
 
 interface Unit {
@@ -539,68 +540,82 @@ export const ConverterScreen: React.FC = () => {
             </button>
           </div>
 
-          {/* থেকে/কিসে মাঝারি চিপ (শুধু দৈর্ঘ্য — ধরন বাদ) — উপরে mt-2
-              ফাঁকা, যাতে ফলাফলের সংখ্যার গায়ে লেগে না থাকে (#97) */}
-          <div className="mt-2 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
-              <div className="relative min-w-0 flex-1">
-                <div data-row="from" className="flex gap-1.5">
-                  {LEN_UNITS.map((x) => (
-                    <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
-                      {x.t}
-                    </button>
-                  ))}
+          {/* থেকে/কিসে কার্ড + দ্রুত টেবিল — বামে সীমাবদ্ধ, ডানে গোল লোগো
+              (প্রিভিউ ২১-B, Founder-অনুমোদিত ২৭ নভেম্বর; লাল বক্স নেই —
+              ওটা শুধু সীমানা বোঝানোর মার্কিং ছিল)। উপরে mt-2 ফাঁকা, যাতে
+              ফলাফলের সংখ্যার গায়ে লেগে না থাকে (#97)। সরু ব্লকে চিপের
+              ফন্ট ১৩px/লাইন ১.১৫, shrink + min-w-0 + px-1 —
+              নইলে shrink-0 চিপ কার্ড ছাড়িয়ে লোগোর গায়ে উঠত; মাপা:
+              ১৩px-এ সব চিপ এক লাইনেই আঁটে (sw==cw, সব ভিউপোর্টে)। সারির gap
+              ১.৫ আগের মতোই আছে। */}
+          <div className="mt-2 flex items-center gap-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5 [&_button]:text-[13px] [&_button]:leading-[1.15] [&_button]:shrink [&_button]:min-w-0 [&_button]:px-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
+                  <div className="relative min-w-0 flex-1">
+                    <div data-row="from" className="flex gap-1.5">
+                      {LEN_UNITS.map((x) => (
+                        <button key={x.k} onClick={() => pickFrom(x.k)} className={chip(x.k === from)} aria-pressed={x.k === from}>
+                          {x.t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="my-0 h-px bg-[#2a2a2a]" />
+                <div className="flex items-center gap-1.5">
+                  <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">কিসে</span>
+                  <div className="relative min-w-0 flex-1">
+                    <div data-row="to" className="flex gap-1.5">
+                      {toList.map((x) => (
+                        <button
+                          key={x.k}
+                          onClick={() => {
+                            buzz();
+                            setTo(x.k);
+                          }}
+                          className={chip(x.k === to)}
+                          aria-pressed={x.k === to}
+                        >
+                          {x.t}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="my-0 h-px bg-[#2a2a2a]" />
-            <div className="flex items-center gap-1.5">
-              <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">কিসে</span>
-              <div className="relative min-w-0 flex-1">
-                <div data-row="to" className="flex gap-1.5">
-                  {toList.map((x) => (
-                    <button
-                      key={x.k}
-                      onClick={() => {
-                        buzz();
-                        setTo(x.k);
-                      }}
-                      className={chip(x.k === to)}
-                      aria-pressed={x.k === to}
-                    >
-                      {x.t}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* দ্রুত টেবিল + বিজোড় সাজেশন (৫/১৫/২৫/৩৫) */}
-          <div className="mt-0 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                buzz();
-                setSheet('quick');
-              }}
-              className="flex min-h-[30px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
-            >
-              <Table2 className="h-4 w-4" />
-              দ্রুত টেবিল
-            </button>
-            {SUGGESTIONS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                data-suggest={n}
-                onClick={() => pickSuggest(n)}
-                className="flex min-h-[30px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
-              >
-                {toBn(n)}
-              </button>
-            ))}
+              {/* দ্রুত টেবিল + বিজোড় সাজেশন (৫/১৫/২৫/৩৫) — কার্ডের ঠিক নিচে
+                  (mt-0): মাঝে mt-2 দিলে ৬৪০/৭০০px উচ্চতায় ৮px স্ক্রল হতো —
+                  ডিসপ্লে তখন আগেই সর্বনিম্ন ৮২px-এ থাকে, আর কি-এর মাপ
+                  Founder-অগ্রাধিকার (৭০০px-এ ছোট করা যাবে না)। */}
+              <div className="mt-0 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    buzz();
+                    setSheet('quick');
+                  }}
+                  className="flex min-h-[30px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
+                >
+                  <Table2 className="h-4 w-4" />
+                  দ্রুত টেবিল
+                </button>
+                {SUGGESTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    data-suggest={n}
+                    onClick={() => pickSuggest(n)}
+                    className="flex min-h-[30px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
+                  >
+                    {toBn(n)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <AppLogo size={104} className="shrink-0" />
           </div>
 
           {/* কিপ্যাড — গোল, বড় সংখ্যা */}
