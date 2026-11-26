@@ -12,26 +12,28 @@
  * উপরে: কপি আইকন + "ক্যালকুলেটর" শিরোনাম + ইতিহাস (ঘড়ি) আইকন +
  * মোড সুইচ (Link Calculator ↔ Normal Calculator)।
  * কিপ্যাড পুরো প্রস্থ জুড়ে — কি গোল, সর্বোচ্চ ৭২px (২৬ নভেম্বর ০৩:৩৯,
- * Founder: বোতাম বড় হয়ে গেছে); কি-সূত্র (calc((100dvh-412px)/4))
+ * Founder: বোতাম বড় হয়ে গেছে); কি-সূত্র (calc((100svh-412px)/4))
  * ৭০০px ও তার উপরে কি পুরো ৭২px-ই রাখে, শুধু তার নিচে (৬৮০px-এর নিচে)
  * কি ছোট করে — ৬৪০px-এ কি ৫৭px হয়, তাই ৬৪০px-এও কিপ্যাডের নিচের সারি
  * নিচের বারের উপরে থাকে, স্ক্রল হয় না (২৬ নভেম্বর ১৬:৩৬ ফিক্স — ৬৪০px-এ
  * নিচের সারি বারের আড়ালে চাপা পড়ে "০" চাপলে দখল পরিমাপ খুলে যেত)।
- * নিচের বারের জায়গা নমনীয় ফাঁকা (স্পেসার) আর ফাঁকা/মার্জিন ছাঁটাই থেকে
- * আসে — উপরের ঘর (ডিসপ্লে ইনপুট ৪০px, ফলাফল ২৮px; থেকে/কিসে কার্ড)
- * একেবারে অপরিবর্তিত থাকে (Founder, ২৬ নভেম্বর ১৫:১৩ — "এই ঘরটি বড়
- * থাকবে")। থেকে/কিসে চিপ সামান্য বড় (min-h ৪০px, ১৫px — Founder,
- * ২৬ নভেম্বর ১৫:২২)। ফলাফলের ঘর বড় রাখা হয়েছে — ইনপুট ৪০px, ফলাফল
- * ২৮px। লিংক মোডে ব্লকগুলোর মাঝের ফাঁকা (mt-0.5) তুলে দেওয়া হয়েছে
- * (mt-0) — ৬৪০px-এ বাড়তি ৮px জায়গা দেয়; ৭০০px ও তার উপরে স্পেসার
- * সেটা শুষে নেয়, কিপ্যাডের জায়গা বদলায় না।
- * নিচের বার (BottomNav) এই স্ক্রিনেও দেখা যায়, সাধারণ সাইজে — Founder,
- * ২৬ নভেম্বর ১৫:০৭ (register #95; আগের লুকানো-নির্দেশনা বাতিল)।
- * কিপ্যাড নিচের দিকে নামানো: ডিসপ্লে/কার্ড/সাজেশন উপরে থাকে, তারপর নমনীয়
- * ফাঁকা জায়গা (flex-1 স্পেসার), কিপ্যাড রুটের নিচে আটকে থাকে — নিচের
- * বারের ঠিক উপরে শেষ হয়; লম্বা স্ক্রিনে ফাঁকাটা উপরে (সাজেশনের নিচে)
- * বাড়ে, কিপ্যাড নিচেই থাকে। রুটের নিচের প্যাডিং (pb-[92px]) নিচের
- * বারের জায়গা — ভাসমান পিল (৭০px + ১৪px নিচের ফাঁকা) + ~৮px ফাঁকা।
+ * লেআউট (Founder, ২৬ নভেম্বর ২০:৪৬, register #96): উপরের সারি →
+ * ডিসপ্লে (flex-1 — খালি জায়গাটা ডিসপ্লের জন্য, লেখা নিচে সারিবদ্ধ) →
+ * থেকে/কিসে কার্ড → দ্রুত টেবিল/সাজেশন → কিপ্যাড → নিচের বারের জায়গা।
+ * সাজেশনের নিচের আলাদা স্পেসার তুলে দেওয়া হয়েছে — ডিসপ্লেই নমনীয় অংশ।
+ * ফলাফলের লাইন leading ১.৫ (৪২px) — Noto Serif Bengali-র ডেসেন্ডার
+ * (ইঞ্চি/ফুট) যাতে নিচের কার্ডে কাটা না পড়ে (২০:৪৬-এর স্ক্রিনশটে
+ * "৬ ফুট ৭ ইঞ্চি"-র নিচ কাটা যাচ্ছিল — leading-none-এর লাইন বাক্স
+ * ফন্টের চেয়ে ছোট ছিল)।
+ * স্ক্রল-সংশোধন (২৬ নভেম্বর ২০:৪৬): রুট ও কি-সূত্রে 100dvh-এর বদলে
+ * 100svh — মোবাইল Chrome-এ dvh টুলবারের সঙ্গে বদলায়, svh বদলায় না।
+ * আসল কারণ: App.tsx-র রুট `min-h-screen` = 100vh, আর Chrome-এ vh =
+ * বড় ভিউপোর্ট (টুলবার লুকানো অবস্থা, ~৯১৪px) — তাই টুলবার দেখানো
+ * থাকলে (ভিউপোর্ট ~৮৩৪px) ডকুমেন্ট ৯১৪px হয়ে ~৮০px স্ক্রল হতো;
+ * headless CDP-তে টুলবার নেই বলে এটা ধরা পড়েনি। App.tsx-ও svh-এ
+ * বদলানো হয়েছে (min-h-screen → min-h-svh)।
+ * নিচের বারের জায়গা রুটের নিচের প্যাডিং (pb-[92px]) — ভাসমান পিল
+ * (৭০px + ১৪px নিচের ফাঁকা) + ~৮px ফাঁকা।
  *
  * সম্পূর্ণ অফলাইন। সাম্প্রতিক হিসাব ফোনে (localStorage) থাকে।
  * ফন্ট: Noto Serif Bengali (base64, calculator-font.css) — শুধু এই স্ক্রিনে,
@@ -364,9 +366,11 @@ export const ConverterScreen: React.FC = () => {
     // ৭২px-ই থাকে; ৬৪০px-এ কি ৫৭px হয় (Founder-এর অগ্রাধিকার: ডিসপ্লে/কি
     // ৭০০px-এ ছোট করা যাবে না; ৬৪০px-এ নিচের বারের নিচে কিপ্যাডের নিচের
     // সারি চাপা পড়ে যেত — তাই উচ্চতার সূত্রের ধ্রুবক ৩৩০ → ৪১২)।
+    // উচ্চতা 100svh দিয়ে মাপা হয় (dvh নয়) — মোবাইল Chrome-এ dvh
+    // টুলবারের সঙ্গে বদলায়, svh বদলায় না (২৬ নভেম্বর ২০:৪৬, #96)।
     // গ্রিড পুরো প্রস্থ জুড়েই থাকে, কি সেলের মাঝখানে বসে (mx-auto)
     const base =
-      'mx-auto flex size-[min(82px,20vw,calc((100dvh-412px)/4))] shrink-0 items-center justify-center rounded-full text-white transition-transform active:scale-95';
+      'mx-auto flex size-[min(82px,20vw,calc((100svh-412px)/4))] shrink-0 items-center justify-center rounded-full text-white transition-transform active:scale-95';
     if (k === '=' || k === 'eq') return `${base} bg-[#1e9bd8] text-[32px] font-normal`;
     if (m === 'link') {
       if (k === 'del' || k === 'AC' || k === 'swap') return `${base} bg-[#5c5c5c] text-[24px] font-normal`;
@@ -380,7 +384,7 @@ export const ConverterScreen: React.FC = () => {
   return (
     <div
       id="converter-screen"
-      className="relative -mx-3.5 flex min-h-[calc(100dvh-65px)] flex-col bg-black px-3 pb-[92px] pt-0 text-white sm:-mx-6"
+      className="relative -mx-3.5 flex min-h-[calc(100svh-65px)] flex-col bg-black px-3 pb-[92px] pt-0 text-white sm:-mx-6"
     >
       {/* উপরের সারি: কপি + শিরোনাম + ইতিহাস + মোড সুইচ */}
       <div className="flex items-center gap-2">
@@ -388,7 +392,7 @@ export const ConverterScreen: React.FC = () => {
           type="button"
           aria-label="কপি করুন"
           onClick={copyResult}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2b2b2b] text-white transition-transform active:scale-95"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2b2b2b] text-white transition-transform active:scale-95"
         >
           <Copy className="h-5 w-5" />
         </button>
@@ -400,7 +404,7 @@ export const ConverterScreen: React.FC = () => {
             buzz();
             setSheet('history');
           }}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#2b2b2b] text-white transition-transform active:scale-95"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#2b2b2b] text-white transition-transform active:scale-95"
         >
           <Clock className="h-5 w-5" />
         </button>
@@ -411,7 +415,7 @@ export const ConverterScreen: React.FC = () => {
             buzz();
             setMode((m) => (m === 'link' ? 'normal' : 'link'));
           }}
-          className="flex h-10 shrink-0 items-center gap-1 rounded-full bg-[#2b2b2b] px-2.5 text-[11px] font-medium text-white transition-transform active:scale-95"
+          className="flex h-9 shrink-0 items-center gap-1 rounded-full bg-[#2b2b2b] px-2.5 text-[11px] font-medium text-white transition-transform active:scale-95"
         >
           <ArrowLeftRight className="h-3.5 w-3.5 shrink-0" />
           {mode === 'link' ? 'Link Calculator' : 'Normal Calculator'}
@@ -420,9 +424,10 @@ export const ConverterScreen: React.FC = () => {
 
       {mode === 'link' ? (
         <>
-          {/* ডিসপ্লে — শুধু ২ লাইন: ইনপুট + ফলাফল (কোনো সমীকরণ/মোট লাইন নেই);
-              ফলাফলের ঘর বড় রাখা হয়েছে — ইনপুট ৪০px, ফলাফল ২৮px */}
-          <div className="mt-0 text-right" data-display>
+          {/* ডিসপ্লে — flex-1: খালি জায়গাটা ডিসপ্লের জন্য, লেখা নিচে
+              সারিবদ্ধ (justify-end); ফলাফলের লাইন leading ১.৫ যাতে
+              বাংলা ডেসেন্ডার (ইঞ্চি/ফুট) নিচের কার্ডে কাটা না পড়ে */}
+          <div className="mt-0 flex flex-1 flex-col justify-end text-right" data-display>
             <div className="flex min-h-[40px] items-center justify-end gap-1" data-display-input>
               <span className="truncate text-[40px] font-normal leading-none">{v === '' ? '০' : toBn(v)}</span>
               <span className="shrink-0 text-[17px] font-normal text-neutral-400">{u.t}</span>
@@ -432,7 +437,7 @@ export const ConverterScreen: React.FC = () => {
               type="button"
               onClick={copyResult}
               data-display-result
-              className="block w-full truncate text-right text-[28px] font-normal leading-none text-amber-200"
+              className="block w-full truncate text-right text-[28px] font-normal leading-[1.5] text-amber-200"
               aria-label="ফলাফল কপি করুন"
             >
               {result.value === '' ? '—' : result.value}
@@ -440,7 +445,7 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* থেকে/কিসে মাঝারি চিপ (শুধু দৈর্ঘ্য — ধরন বাদ) */}
-          <div className="mt-0 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-1">
+          <div className="mt-0 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5">
             <div className="flex items-center gap-1.5">
               <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
               <div className="relative min-w-0 flex-1">
@@ -453,7 +458,7 @@ export const ConverterScreen: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="my-0.5 h-px bg-[#2a2a2a]" />
+            <div className="my-0 h-px bg-[#2a2a2a]" />
             <div className="flex items-center gap-1.5">
               <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">কিসে</span>
               <div className="relative min-w-0 flex-1">
@@ -484,7 +489,7 @@ export const ConverterScreen: React.FC = () => {
                 buzz();
                 setSheet('quick');
               }}
-              className="flex min-h-[32px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
+              className="flex min-h-[30px] shrink-0 items-center gap-1.5 rounded-full border border-[#3d3d3d] bg-[#1f1f1f] px-3 text-[13px] font-medium text-[#e5e5e5] transition-transform active:scale-95"
             >
               <Table2 className="h-4 w-4" />
               দ্রুত টেবিল
@@ -495,16 +500,12 @@ export const ConverterScreen: React.FC = () => {
                 type="button"
                 data-suggest={n}
                 onClick={() => pickSuggest(n)}
-                className="flex min-h-[32px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
+                className="flex min-h-[30px] flex-1 items-center justify-center rounded-full border border-[#3d3d3d] bg-[#1f1f1f] text-[16px] font-medium text-amber-200 transition-transform active:scale-95"
               >
                 {toBn(n)}
               </button>
             ))}
           </div>
-
-          {/* নমনীয় ফাঁকা — লম্বা স্ক্রিনে বাড়ে, ছোট স্ক্রিনে শূন্য হয়;
-              কিপ্যাডকে রুটের নিচে (নিচের বারের ঠিক উপরে) নামিয়ে রাখে */}
-          <div data-spacer aria-hidden="true" className="min-h-0 flex-1" />
 
           {/* কিপ্যাড — গোল, বড় সংখ্যা */}
           <div className="mt-0 grid w-full grid-cols-4 gap-1">
@@ -534,8 +535,9 @@ export const ConverterScreen: React.FC = () => {
         </>
       ) : (
         <>
-          {/* সাধারণ ক্যালকুলেটর ডিসপ্লে */}
-          <div className="mt-2 min-h-[100px] text-right" data-normal-display-wrap>
+          {/* সাধারণ ক্যালকুলেটর ডিসপ্লে — flex-1: খালি জায়গাটা ডিসপ্লের
+              জন্য, লেখা নিচে সারিবদ্ধ (লিংক মোডের মতোই) */}
+          <div className="mt-0 flex min-h-[100px] flex-1 flex-col justify-end text-right" data-normal-display-wrap>
             <div className="flex min-h-[24px] items-center justify-end text-[16px] font-normal text-neutral-400" data-normal-expr>
               {nExpr || ' '}
             </div>
@@ -543,10 +545,6 @@ export const ConverterScreen: React.FC = () => {
               {toBn(nDisplay)}
             </div>
           </div>
-
-          {/* নমনীয় ফাঁকা — লম্বা স্ক্রিনে বাড়ে, ছোট স্ক্রিনে শূন্য হয়;
-              কিপ্যাডকে রুটের নিচে (নিচের বারের ঠিক উপরে) নামিয়ে রাখে */}
-          <div data-spacer aria-hidden="true" className="min-h-0 flex-1" />
 
           {/* সাধারণ ক্যালকুলেটর কিপ্যাড — স্ক্রিনশটের মতো */}
           <div className="mt-0.5 grid w-full grid-cols-4 gap-1">

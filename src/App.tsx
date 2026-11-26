@@ -520,7 +520,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/60 text-slate-900 font-sans flex flex-col antialiased selection:bg-emerald-200 selection:text-emerald-950">
+    <div className="min-h-svh bg-slate-50/60 text-slate-900 font-sans flex flex-col antialiased selection:bg-emerald-200 selection:text-emerald-950">
       {/* Offline Status Badge */}
       <OfflineIndicator lang={lang} />
 
