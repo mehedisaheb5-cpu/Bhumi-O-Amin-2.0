@@ -32,6 +32,12 @@
  * থাকলে (ভিউপোর্ট ~৮৩৪px) ডকুমেন্ট ৯১৪px হয়ে ~৮০px স্ক্রল হতো;
  * headless CDP-তে টুলবার নেই বলে এটা ধরা পড়েনি। App.tsx-ও svh-এ
  * বদলানো হয়েছে (min-h-screen → min-h-svh)।
+ * #97 (২৬ নভেম্বর ২১:৩৩): (১) থেকে/কিসে কার্ডের উপরে mt-2 (৮px) ফাঁকা —
+ * আগে ফলাফলের লাইনের নিচ কার্ডের গায়ে লেগে থাকত (clipGap ০); (২)
+ * অটো-ফিট — লম্বা সংখ্যা আর truncate হয় না, ফন্ট ছোট হয়ে পুরো
+ * সংখ্যাটা দেখায় (ইনপুট ৪০px → সর্বনিম্ন ২২px, ফলাফল ২৮px →
+ * সর্বনিম্ন ১৬px); ক্যারেট ডান প্রান্তেই থাকে — পুরো সংখ্যা দেখা
+ * গেলে শেষ অঙ্কটাই যে ⌫ মুছবে সেটা স্পষ্ট থাকে।
  * নিচের বারের জায়গা রুটের নিচের প্যাডিং (pb-[92px]) — ভাসমান পিল
  * (৭০px + ১৪px নিচের ফাঁকা) + ~৮px ফাঁকা।
  *
@@ -39,7 +45,7 @@
  * ফন্ট: Noto Serif Bengali (base64, calculator-font.css) — শুধু এই স্ক্রিনে,
  * স্বাভাবিক ওজন (font-normal/medium), সব Bold নয়।
  */
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, Clock, Copy, Delete, Table2, X } from 'lucide-react';
 import './calculator-font.css';
 
@@ -106,6 +112,100 @@ const NORMAL_KEYS = ['AC', '%', '⌫', '÷', '7', '8', '9', '×', '4', '5', '6',
 
 const OP_SYM: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' };
 
+/* ---------- অটো-ফিট: লম্বা সংখ্যা পুরো দেখানো (truncate নয়) ----------
+ * Noto Serif Bengali-তে অঙ্কের প্রস্থ এক নয় — বাস্তব ফন্ট মেপে
+ * ক্যালিব্রেট করা (২৬ নভেম্বর ২১:৩৭, headless Chrome canvas):
+ * ০:২৪ ১:২১ ২:২০ ৩:২৭ ৪:২২ ৫:২৩ ৬:২৭ ৭:২২ ৮:২৪ ৯:২৪ (@৪০px);
+ * '.'/',' ১১px (@৪০px); 'ফুট' ৩৪ 'ইঞ্চি' ৪২ 'মিটার' ৫৬ 'লিংক' ৫৫,
+ * ফাঁকা ৭px (@২৮px); লাতিন 'e'/'+' ২৩px, '−' ১৩px (@৪০px — এরা
+ * Noto Serif Bengali-তে নেই, ফলব্যাক স্ট্যাক (Noto Sans Bengali,
+ * sans-serif) থেকে আসে; তাই canvas-ও একই স্ট্যাক দিয়ে মাপে)।
+ * ৯ অঙ্ক = ২১০px, ১৩ অক্ষরের swap-মান = ২৮৮px —
+ * ৩৬০px ফোনে ইনপুটের জায়গা ~২৮৬px, তাই swap-মান সামান্য ছাড়িয়ে যায়
+ * (এটাই Founder-এর দেখা কাটা পড়া)। অনুমান প্রায় নির্ভুল (রৈখিক
+ * স্কেল), আর ২px নিরাপত্তা-মার্জিন রাখা হয়েছে। */
+const DIGIT_W40: Record<string, number> = { '০': 24, '১': 21, '২': 20, '৩': 27, '৪': 22, '৫': 23, '৬': 27, '৭': 22, '৮': 24, '৯': 24 };
+const WORD_W28: Record<string, number> = { 'ফুট': 34, 'ইঞ্চি': 42, 'মিটার': 56, 'লিংক': 55 };
+const FIT_FONT = '"Noto Serif Bengali", "Noto Sans Bengali", sans-serif';
+/** লেখাটা sizePx ফন্টে কত চওড়া হবে তার অনুমান (px)। */
+function estWidthPx(text: string, sizePx: number): number {
+  let w = 0;
+  let i = 0;
+  while (i < text.length) {
+    let matched = false;
+    for (const word of Object.keys(WORD_W28)) {
+      if (text.startsWith(word, i)) {
+        w += WORD_W28[word] * (sizePx / 28);
+        i += word.length;
+        matched = true;
+        break;
+      }
+    }
+    if (matched) continue;
+    const ch = text[i];
+    if (ch in DIGIT_W40) w += DIGIT_W40[ch] * (sizePx / 40);
+    else if (ch === '.' || ch === ',') w += 11 * (sizePx / 40);
+    else if (ch === ' ') w += 7 * (sizePx / 28);
+    else if (ch === 'e' || ch === '+') w += 23 * (sizePx / 40);
+    else if (ch === '-' || ch === '−') w += 13 * (sizePx / 40);
+    else w += 0.5 * sizePx; // অচেনা অক্ষর — রক্ষণশীল অনুমান
+    i += 1;
+  }
+  return w;
+}
+/** রেন্ডার-সময়ে ফন্ট মাপা: জায়গায় আঁটলে basePx, না আঁটলে ছোট (minPx ফ্লোর)। */
+function fitFontSize(text: string, basePx: number, minPx: number, availPx: number): number {
+  if (!text || availPx <= 0) return basePx;
+  const w = estWidthPx(text, basePx);
+  if (w <= availPx) return basePx;
+  return Math.max(minPx, Math.floor((basePx * (availPx - 2)) / w));
+}
+/**
+ * অটো-ফিট হুক — পুরো লেখাটা সবসময় দেখায়, কখনো truncate করে না।
+ * স্তর ১ (রেন্ডার-সময়ে অনুমান): estWidthPx দিয়ে ফন্ট মাপা — jsdom-এও
+ * কাজ করে (কোনো লেআউট লাগে না)। স্তর ২ (বাস্তব ব্রাউজারে সুরক্ষা):
+ * canvas measureText দিয়ে আসল ফন্টে মেপে, তবুও না আঁটলে আরও ছোট করা;
+ * লেখা ছোট হলে আগের মাপে ফেরা। ক্যারেটের চেহারা/অবস্থান বদলায় না।
+ */
+function useAutoFit<T extends HTMLElement>(text: string, basePx: number, minPx: number, availPx: number) {
+  const ref = useRef<T | null>(null);
+  const estSize = fitFontSize(text, basePx, minPx, availPx);
+  const [refined, setRefined] = useState<number | null>(null);
+  const size = refined ?? estSize;
+  const [fontTick, setFontTick] = useState(0);
+  useEffect(() => {
+    let on = true;
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (on) setFontTick((t) => t + 1);
+      });
+    }
+    return () => {
+      on = false;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || availPx <= 0) return;
+    const avail = el.clientWidth;
+    if (avail <= 0) return;
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return; // jsdom-এ canvas নেই — স্তর ১-ই যথেষ্ট
+    const t = el.textContent || '';
+    if (!t) return;
+    ctx.font = `400 ${size}px ${FIT_FONT}`;
+    const w = ctx.measureText(t).width;
+    if (w > avail && size > minPx) {
+      const next = Math.max(minPx, Math.floor((size * avail) / w));
+      if (next < size) setRefined(next);
+    } else if (refined !== null && estSize > size) {
+      setRefined(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, size, estSize, minPx, availPx, fontTick]);
+  return { ref, size };
+}
+
 export const ConverterScreen: React.FC = () => {
   const [mode, setMode] = useState<'link' | 'normal'>('link');
   const [from, setFrom] = useState('link');
@@ -141,6 +241,14 @@ export const ConverterScreen: React.FC = () => {
     []
   );
 
+  /** ভিউপোর্ট প্রস্থ — অটো-ফিটের জায়গা মাপতে (ঘোরালে/রিসাইজে আপডেট হয়) */
+  const [vw, setVw] = useState(() => (typeof window !== 'undefined' ? window.innerWidth : 360));
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   /** কী-প্যাডে যেই কি-তে ট্যাপ হবে ভাইব্রেট করবে (২৪ নভেম্বর Founder) */
   const buzz = () => {
     try {
@@ -166,6 +274,19 @@ export const ConverterScreen: React.FC = () => {
     const val = `${nice(base / t.f, 4)} ${t.t}`;
     return { value: val, copy: `${lhs} = ${val}` };
   }, [base, to, v, u.t, num]);
+
+  // ---- অটো-ফিট: ডিসপ্লের জায়গা ----
+  // কনভার্টার রুটের ভেতরের প্রস্থ = ভিউপোর্ট − ২৪px (px-3 দুই পাশে)।
+  // ইনপুটের অঙ্কের জায়গা = ভেতরের প্রস্থ − ৫০px (সবচেয়ে চওড়া একক
+  // মিটার ৩৫px + ক্যারেট ৩px + ml-1 ৪px + দুই ফাঁকা ৮px) — বর্তমান
+  // একক যেটাই হোক, সবচেয়ে চওড়া এককের হিসেবে মাপা, যাতে swap-এর
+  // ১৩ অক্ষরের মান (২৮৮px) ৩৬০px ফোনে ৩৯px-এ নেমে পুরো দেখায়;
+  // ফলাফল/সাধারণ ডিসপ্লে পুরো প্রস্থ পায়।
+  const contentW = vw - 24;
+  const inputAvail = Math.max(0, contentW - 50);
+  const inputFit = useAutoFit<HTMLSpanElement>(v === '' ? '০' : toBn(v), 40, 22, inputAvail);
+  const resultFit = useAutoFit<HTMLButtonElement>(result.value === '' ? '—' : result.value, 28, 16, contentW);
+  const normalFit = useAutoFit<HTMLDivElement>(toBn(nDisplay), 40, 22, contentW);
 
   const pushHist = (f: string, val: string) => {
     if (!(parseFloat(val) > 0)) return;
@@ -426,10 +547,13 @@ export const ConverterScreen: React.FC = () => {
         <>
           {/* ডিসপ্লে — flex-1: খালি জায়গাটা ডিসপ্লের জন্য, লেখা নিচে
               সারিবদ্ধ (justify-end); ফলাফলের লাইন leading ১.৫ যাতে
-              বাংলা ডেসেন্ডার (ইঞ্চি/ফুট) নিচের কার্ডে কাটা না পড়ে */}
+              বাংলা ডেসেন্ডার (ইঞ্চি/ফুট) নিচের কার্ডে কাটা না পড়ে;
+              অটো-ফিট: লম্বা সংখ্যা truncate নয়, ফন্ট ছোট হয়ে পুরো দেখায় */}
           <div className="mt-0 flex flex-1 flex-col justify-end text-right" data-display>
             <div className="flex min-h-[40px] items-center justify-end gap-1" data-display-input>
-              <span className="truncate text-[40px] font-normal leading-none">{v === '' ? '০' : toBn(v)}</span>
+              <span ref={inputFit.ref} style={{ fontSize: inputFit.size }} className="min-w-0 whitespace-nowrap text-[40px] font-normal leading-none">
+                {v === '' ? '০' : toBn(v)}
+              </span>
               <span className="shrink-0 text-[17px] font-normal text-neutral-400">{u.t}</span>
               <span className="ml-1 inline-block h-[30px] w-[3px] shrink-0 animate-pulse bg-[#1e9bd8]" />
             </div>
@@ -437,15 +561,18 @@ export const ConverterScreen: React.FC = () => {
               type="button"
               onClick={copyResult}
               data-display-result
-              className="block w-full truncate text-right text-[28px] font-normal leading-[1.5] text-amber-200"
+              ref={resultFit.ref}
+              style={{ fontSize: resultFit.size }}
+              className="block w-full whitespace-nowrap text-right text-[28px] font-normal leading-[1.5] text-amber-200"
               aria-label="ফলাফল কপি করুন"
             >
               {result.value === '' ? '—' : result.value}
             </button>
           </div>
 
-          {/* থেকে/কিসে মাঝারি চিপ (শুধু দৈর্ঘ্য — ধরন বাদ) */}
-          <div className="mt-0 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5">
+          {/* থেকে/কিসে মাঝারি চিপ (শুধু দৈর্ঘ্য — ধরন বাদ) — উপরে mt-2
+              ফাঁকা, যাতে ফলাফলের সংখ্যার গায়ে লেগে না থাকে (#97) */}
+          <div className="mt-2 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5">
             <div className="flex items-center gap-1.5">
               <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
               <div className="relative min-w-0 flex-1">
@@ -541,7 +668,7 @@ export const ConverterScreen: React.FC = () => {
             <div className="flex min-h-[24px] items-center justify-end text-[16px] font-normal text-neutral-400" data-normal-expr>
               {nExpr || ' '}
             </div>
-            <div className="mt-1 truncate text-[40px] font-normal leading-tight" data-normal-display>
+            <div className="mt-1 whitespace-nowrap text-[40px] font-normal leading-tight" data-normal-display ref={normalFit.ref} style={{ fontSize: normalFit.size }}>
               {toBn(nDisplay)}
             </div>
           </div>
