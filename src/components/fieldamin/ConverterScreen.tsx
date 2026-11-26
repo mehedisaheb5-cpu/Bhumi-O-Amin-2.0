@@ -544,13 +544,17 @@ export const ConverterScreen: React.FC = () => {
               (প্রিভিউ ২১-B, Founder-অনুমোদিত ২৭ নভেম্বর; লাল বক্স নেই —
               ওটা শুধু সীমানা বোঝানোর মার্কিং ছিল)। উপরে mt-2 ফাঁকা, যাতে
               ফলাফলের সংখ্যার গায়ে লেগে না থাকে (#97)। সরু ব্লকে চিপের
-              ফন্ট ১৩px/লাইন ১.১৫, shrink + min-w-0 + px-1 —
-              নইলে shrink-0 চিপ কার্ড ছাড়িয়ে লোগোর গায়ে উঠত; মাপা:
-              ১৩px-এ সব চিপ এক লাইনেই আঁটে (sw==cw, সব ভিউপোর্টে)। সারির gap
-              ১.৫ আগের মতোই আছে। */}
+              ফন্ট ১৩px/লাইন ১.১৫, flex-1 + min-w-0 + px-1 — নমুনার
+              .chip{flex:1} অনুযায়ী: ৮ চিপই সমান প্রস্থে, দুই সারি বরাবর;
+              "ফুট-ইঞ্চি" সরু ব্লকে ২ লাইনে ভাঙে (নমুনাতেও তাই), বাকিগুলো
+              ১ লাইনে। কিপ্যাডের উপরে mt-2 (৮px) ফাঁকা — নমুনার
+              .keys{margin-top:8px} অনুযায়ী (Founder-ফিক্স, ২৭ নভেম্বর)।
+              ট্রেডঅফ: ৬৪০/৭০০px উচ্চতায় ৮px স্ক্রল হয় — ডিসপ্লে তখন
+              আগেই সর্বনিম্ন ৮২px-এ থাকে; ৭৮০px ও তার উপরে স্ক্রল ০।
+              সারির gap ১.৫ আগের মতোই আছে। */}
           <div className="mt-2 flex items-center gap-2.5">
             <div className="min-w-0 flex-1">
-              <div className="rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5 [&_button]:text-[13px] [&_button]:leading-[1.15] [&_button]:shrink [&_button]:min-w-0 [&_button]:px-1">
+              <div className="rounded-3xl border border-[#2a2a2a] bg-[#141414] p-0.5 [&_button]:flex-1 [&_button]:text-[13px] [&_button]:leading-[1.15] [&_button]:min-w-0 [&_button]:px-1">
                 <div className="flex items-center gap-1.5">
                   <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
                   <div className="relative min-w-0 flex-1">
@@ -619,7 +623,7 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* কিপ্যাড — গোল, বড় সংখ্যা */}
-          <div className="mt-0 grid w-full grid-cols-4 gap-1">
+          <div className="mt-2 grid w-full grid-cols-4 gap-1">
             {LINK_KEYS.map((k) => (
               <button
                 key={k}
