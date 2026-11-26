@@ -12,10 +12,26 @@
  * উপরে: কপি আইকন + "ক্যালকুলেটর" শিরোনাম + ইতিহাস (ঘড়ি) আইকন +
  * মোড সুইচ (Link Calculator ↔ Normal Calculator)।
  * কিপ্যাড পুরো প্রস্থ জুড়ে — কি গোল, সর্বোচ্চ ৭২px (২৬ নভেম্বর ০৩:৩৯,
- * Founder: বোতাম বড় হয়ে গেছে); ছোট ভিউপোর্টে কি আরও ছোট হয় যাতে
- * স্ক্রল না হয়। ফলাফলের ঘর বড় রাখা হয়েছে — ইনপুট ৪০px, ফলাফল ২৮px।
- * নিচের বার (BottomNav) এই স্ক্রিনে লুকানো থাকে — App.tsx দেখুন
- * (isCalculatorScreen)। হেডার থাকে, তাই বের হতে হেডারের লোগো/☰ ব্যবহার করতে হয়।
+ * Founder: বোতাম বড় হয়ে গেছে); কি-সূত্র (calc((100dvh-412px)/4))
+ * ৭০০px ও তার উপরে কি পুরো ৭২px-ই রাখে, শুধু তার নিচে (৬৮০px-এর নিচে)
+ * কি ছোট করে — ৬৪০px-এ কি ৫৭px হয়, তাই ৬৪০px-এও কিপ্যাডের নিচের সারি
+ * নিচের বারের উপরে থাকে, স্ক্রল হয় না (২৬ নভেম্বর ১৬:৩৬ ফিক্স — ৬৪০px-এ
+ * নিচের সারি বারের আড়ালে চাপা পড়ে "০" চাপলে দখল পরিমাপ খুলে যেত)।
+ * নিচের বারের জায়গা নমনীয় ফাঁকা (স্পেসার) আর ফাঁকা/মার্জিন ছাঁটাই থেকে
+ * আসে — উপরের ঘর (ডিসপ্লে ইনপুট ৪০px, ফলাফল ২৮px; থেকে/কিসে কার্ড)
+ * একেবারে অপরিবর্তিত থাকে (Founder, ২৬ নভেম্বর ১৫:১৩ — "এই ঘরটি বড়
+ * থাকবে")। থেকে/কিসে চিপ সামান্য বড় (min-h ৪০px, ১৫px — Founder,
+ * ২৬ নভেম্বর ১৫:২২)। ফলাফলের ঘর বড় রাখা হয়েছে — ইনপুট ৪০px, ফলাফল
+ * ২৮px। লিংক মোডে ব্লকগুলোর মাঝের ফাঁকা (mt-0.5) তুলে দেওয়া হয়েছে
+ * (mt-0) — ৬৪০px-এ বাড়তি ৮px জায়গা দেয়; ৭০০px ও তার উপরে স্পেসার
+ * সেটা শুষে নেয়, কিপ্যাডের জায়গা বদলায় না।
+ * নিচের বার (BottomNav) এই স্ক্রিনেও দেখা যায়, সাধারণ সাইজে — Founder,
+ * ২৬ নভেম্বর ১৫:০৭ (register #95; আগের লুকানো-নির্দেশনা বাতিল)।
+ * কিপ্যাড নিচের দিকে নামানো: ডিসপ্লে/কার্ড/সাজেশন উপরে থাকে, তারপর নমনীয়
+ * ফাঁকা জায়গা (flex-1 স্পেসার), কিপ্যাড রুটের নিচে আটকে থাকে — নিচের
+ * বারের ঠিক উপরে শেষ হয়; লম্বা স্ক্রিনে ফাঁকাটা উপরে (সাজেশনের নিচে)
+ * বাড়ে, কিপ্যাড নিচেই থাকে। রুটের নিচের প্যাডিং (pb-[92px]) নিচের
+ * বারের জায়গা — ভাসমান পিল (৭০px + ১৪px নিচের ফাঁকা) + ~৮px ফাঁকা।
  *
  * সম্পূর্ণ অফলাইন। সাম্প্রতিক হিসাব ফোনে (localStorage) থাকে।
  * ফন্ট: Noto Serif Bengali (base64, calculator-font.css) — শুধু এই স্ক্রিনে,
@@ -338,16 +354,19 @@ export const ConverterScreen: React.FC = () => {
   };
 
   const chip = (on: boolean) =>
-    `shrink-0 min-h-[36px] px-3 rounded-full border text-[14px] font-medium transition active:scale-95 ${
+    `shrink-0 min-h-[40px] px-3 rounded-full border text-[15px] font-medium transition active:scale-95 ${
       on ? 'bg-[#065f46] text-amber-200 border-transparent' : 'bg-[#2b2b2b] border-[#3d3d3d] text-[#e5e5e5]'
     }`;
 
   const keyClass = (k: string, m: 'link' | 'normal') => {
-    // কি গোল, সর্বোচ্চ ৭২px (৩৬০px প্রস্থে ২০vw = ৭২); ছোট ভিউপোর্টে
-    // (উচ্চতা কম হলে) আরও ছোট হয় যাতে স্ক্রল না হয় — গ্রিড পুরো প্রস্থ
-    // জুড়েই থাকে, কি সেলের মাঝখানে বসে (mx-auto)
+    // কি গোল, সর্বোচ্চ ৭২px (৩৬০px প্রস্থে ২০vw = ৭২); সূত্রটি শুধু খুব
+    // ছোট ভিউপোর্টে (৬৮০px-এর নিচে) কি ছোট করে — ৭০০px ও তার উপরে কি পুরো
+    // ৭২px-ই থাকে; ৬৪০px-এ কি ৫৭px হয় (Founder-এর অগ্রাধিকার: ডিসপ্লে/কি
+    // ৭০০px-এ ছোট করা যাবে না; ৬৪০px-এ নিচের বারের নিচে কিপ্যাডের নিচের
+    // সারি চাপা পড়ে যেত — তাই উচ্চতার সূত্রের ধ্রুবক ৩৩০ → ৪১২)।
+    // গ্রিড পুরো প্রস্থ জুড়েই থাকে, কি সেলের মাঝখানে বসে (mx-auto)
     const base =
-      'mx-auto flex size-[min(82px,20vw,calc((100dvh-330px)/4))] shrink-0 items-center justify-center rounded-full text-white transition-transform active:scale-95';
+      'mx-auto flex size-[min(82px,20vw,calc((100dvh-412px)/4))] shrink-0 items-center justify-center rounded-full text-white transition-transform active:scale-95';
     if (k === '=' || k === 'eq') return `${base} bg-[#1e9bd8] text-[32px] font-normal`;
     if (m === 'link') {
       if (k === 'del' || k === 'AC' || k === 'swap') return `${base} bg-[#5c5c5c] text-[24px] font-normal`;
@@ -361,7 +380,7 @@ export const ConverterScreen: React.FC = () => {
   return (
     <div
       id="converter-screen"
-      className="relative -mx-3.5 flex min-h-[calc(100dvh-65px)] flex-col bg-black px-3 pb-2 pt-0 text-white sm:-mx-6"
+      className="relative -mx-3.5 flex min-h-[calc(100dvh-65px)] flex-col bg-black px-3 pb-[92px] pt-0 text-white sm:-mx-6"
     >
       {/* উপরের সারি: কপি + শিরোনাম + ইতিহাস + মোড সুইচ */}
       <div className="flex items-center gap-2">
@@ -403,7 +422,7 @@ export const ConverterScreen: React.FC = () => {
         <>
           {/* ডিসপ্লে — শুধু ২ লাইন: ইনপুট + ফলাফল (কোনো সমীকরণ/মোট লাইন নেই);
               ফলাফলের ঘর বড় রাখা হয়েছে — ইনপুট ৪০px, ফলাফল ২৮px */}
-          <div className="mt-1 text-right" data-display>
+          <div className="mt-0 text-right" data-display>
             <div className="flex min-h-[40px] items-center justify-end gap-1" data-display-input>
               <span className="truncate text-[40px] font-normal leading-none">{v === '' ? '০' : toBn(v)}</span>
               <span className="shrink-0 text-[17px] font-normal text-neutral-400">{u.t}</span>
@@ -421,7 +440,7 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* থেকে/কিসে মাঝারি চিপ (শুধু দৈর্ঘ্য — ধরন বাদ) */}
-          <div className="mt-1 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-1">
+          <div className="mt-0 rounded-3xl border border-[#2a2a2a] bg-[#141414] p-1">
             <div className="flex items-center gap-1.5">
               <span className="w-[38px] shrink-0 text-[13px] font-medium text-neutral-400">থেকে</span>
               <div className="relative min-w-0 flex-1">
@@ -458,7 +477,7 @@ export const ConverterScreen: React.FC = () => {
           </div>
 
           {/* দ্রুত টেবিল + বিজোড় সাজেশন (৫/১৫/২৫/৩৫) */}
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-0 flex items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -483,8 +502,12 @@ export const ConverterScreen: React.FC = () => {
             ))}
           </div>
 
+          {/* নমনীয় ফাঁকা — লম্বা স্ক্রিনে বাড়ে, ছোট স্ক্রিনে শূন্য হয়;
+              কিপ্যাডকে রুটের নিচে (নিচের বারের ঠিক উপরে) নামিয়ে রাখে */}
+          <div data-spacer aria-hidden="true" className="min-h-0 flex-1" />
+
           {/* কিপ্যাড — গোল, বড় সংখ্যা */}
-          <div className="mt-1 grid w-full grid-cols-4 gap-2">
+          <div className="mt-0 grid w-full grid-cols-4 gap-1">
             {LINK_KEYS.map((k) => (
               <button
                 key={k}
@@ -521,8 +544,12 @@ export const ConverterScreen: React.FC = () => {
             </div>
           </div>
 
+          {/* নমনীয় ফাঁকা — লম্বা স্ক্রিনে বাড়ে, ছোট স্ক্রিনে শূন্য হয়;
+              কিপ্যাডকে রুটের নিচে (নিচের বারের ঠিক উপরে) নামিয়ে রাখে */}
+          <div data-spacer aria-hidden="true" className="min-h-0 flex-1" />
+
           {/* সাধারণ ক্যালকুলেটর কিপ্যাড — স্ক্রিনশটের মতো */}
-          <div className="mt-1 grid w-full grid-cols-4 gap-2">
+          <div className="mt-0.5 grid w-full grid-cols-4 gap-1">
             {NORMAL_KEYS.map((k) => (
               <button
                 key={k}

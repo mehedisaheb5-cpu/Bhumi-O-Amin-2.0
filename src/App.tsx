@@ -125,10 +125,9 @@ export default function App() {
     (currentScreen.screenId === 'possession' || currentScreen.screenId === 'measure_possession') &&
     surveyTab === 'drawing_based';
 
-  // ক্যালকুলেটর স্ক্রিন খোলা আছে কি না — খোলা থাকলে নিচের বার (BottomNav)
-  // লুকিয়ে ক্যালকুলেটরকে পুরো জায়গা দেওয়া হয় (Founder, ২৬ নভেম্বর)।
-  // হেডার থাকে — ক্যালকুলেটর থেকে বের হতে হেডারের লোগো (হোম) / ☰ ব্যবহার করতে হয়।
-  const isCalculatorScreen = currentScreen.screenId === 'converter';
+  // ক্যালকুলেটর স্ক্রিনে নিচের বার (BottomNav) আবার দেখানো হয় — Founder,
+  // ২৬ নভেম্বর ১৫:০৭ (register #95): আগের "লুকানো" নির্দেশনা (০১:১৩)
+  // বাতিল; সাধারণ সাইজেই ফিরিয়ে আনতে হবে।
 
   // Modal State
   const [showChatModal, setShowChatModal] = useState<boolean>(false);
@@ -904,10 +903,9 @@ export default function App() {
         onNavigate={handleSideNavigate}
       />
 
-      {/* Simplified Bottom Navigation Bar — ক্যালকুলেটর খোলা থাকলে লুকানো */}
-      {!isCalculatorScreen && (
-        <BottomNav currentTab={activeNavTab} onSelectTab={handleSelectBottomNavTab} lang={lang} />
-      )}
+      {/* Simplified Bottom Navigation Bar — সব স্ক্রিনেই দেখা যায়, ক্যালকুলেটরেও
+          (Founder, ২৬ নভেম্বর ১৫:০৭ — আগের লুকানো-নির্দেশনা বাতিল)। */}
+      <BottomNav currentTab={activeNavTab} onSelectTab={handleSelectBottomNavTab} lang={lang} />
 
       {/* PWA Install Prompt */}
       <InstallPrompt lang={lang} />
