@@ -45,7 +45,7 @@
  * ফন্ট: Noto Serif Bengali (base64, calculator-font.css) — শুধু এই স্ক্রিনে,
  * স্বাভাবিক ওজন (font-normal/medium), সব Bold নয়।
  */
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, Clock, Copy, Delete, Table2, X } from 'lucide-react';
 import './calculator-font.css';
 
@@ -126,7 +126,6 @@ const OP_SYM: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '
  * স্কেল), আর ২px নিরাপত্তা-মার্জিন রাখা হয়েছে। */
 const DIGIT_W40: Record<string, number> = { '০': 24, '১': 21, '২': 20, '৩': 27, '৪': 22, '৫': 23, '৬': 27, '৭': 22, '৮': 24, '৯': 24 };
 const WORD_W28: Record<string, number> = { 'ফুট': 34, 'ইঞ্চি': 42, 'মিটার': 56, 'লিংক': 55 };
-const FIT_FONT = '"Noto Serif Bengali", "Noto Sans Bengali", sans-serif';
 /** লেখাটা sizePx ফন্টে কত চওড়া হবে তার অনুমান (px)। */
 function estWidthPx(text: string, sizePx: number): number {
   let w = 0;
@@ -162,47 +161,17 @@ function fitFontSize(text: string, basePx: number, minPx: number, availPx: numbe
 }
 /**
  * অটো-ফিট হুক — পুরো লেখাটা সবসময় দেখায়, কখনো truncate করে না।
- * স্তর ১ (রেন্ডার-সময়ে অনুমান): estWidthPx দিয়ে ফন্ট মাপা — jsdom-এও
- * কাজ করে (কোনো লেআউট লাগে না)। স্তর ২ (বাস্তব ব্রাউজারে সুরক্ষা):
- * canvas measureText দিয়ে আসল ফন্টে মেপে, তবুও না আঁটলে আরও ছোট করা;
- * লেখা ছোট হলে আগের মাপে ফেরা। ক্যারেটের চেহারা/অবস্থান বদলায় না।
+ * শুধু রেন্ডার-সময়ে অনুমান (estWidthPx দিয়ে ফন্ট মাপা) — jsdom-এও
+ * কাজ করে (কোনো লেআউট লাগে না)। হুকে কোনো setState নেই, তাই লুপ
+ * হওয়া অসম্ভব। (২৭ নভেম্বর ০০:২৩, #98: স্তর ২ — canvas measureText
+ * দিয়ে মাপা useLayoutEffect — তুলে দেওয়া হয়েছে। তার ছোট-করা শাখা
+ * আর ফেরত-আনা শাখা পরস্পরের সঙ্গে লড়ে অসীম লুপে পড়ত (refined →
+ * null → refined …) — Founder-এর ফোনে React error #185 হয়ে অ্যাপ
+ * ভেঙে পড়েছিল। ক্যারেটের চেহারা/অবস্থান বদলায় না।)
  */
 function useAutoFit<T extends HTMLElement>(text: string, basePx: number, minPx: number, availPx: number) {
   const ref = useRef<T | null>(null);
-  const estSize = fitFontSize(text, basePx, minPx, availPx);
-  const [refined, setRefined] = useState<number | null>(null);
-  const size = refined ?? estSize;
-  const [fontTick, setFontTick] = useState(0);
-  useEffect(() => {
-    let on = true;
-    if (typeof document !== 'undefined' && document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        if (on) setFontTick((t) => t + 1);
-      });
-    }
-    return () => {
-      on = false;
-    };
-  }, []);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el || availPx <= 0) return;
-    const avail = el.clientWidth;
-    if (avail <= 0) return;
-    const ctx = document.createElement('canvas').getContext('2d');
-    if (!ctx) return; // jsdom-এ canvas নেই — স্তর ১-ই যথেষ্ট
-    const t = el.textContent || '';
-    if (!t) return;
-    ctx.font = `400 ${size}px ${FIT_FONT}`;
-    const w = ctx.measureText(t).width;
-    if (w > avail && size > minPx) {
-      const next = Math.max(minPx, Math.floor((size * avail) / w));
-      if (next < size) setRefined(next);
-    } else if (refined !== null && estSize > size) {
-      setRefined(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, size, estSize, minPx, availPx, fontTick]);
+  const size = fitFontSize(text, basePx, minPx, availPx);
   return { ref, size };
 }
 
